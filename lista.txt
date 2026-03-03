@@ -1,11 +1,17 @@
 G:\PROJETOS-CODER\SITES\boxIPTV\backend 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend 
 G:\PROJETOS-CODER\SITES\boxIPTV\gerar.txt 
+G:\PROJETOS-CODER\SITES\boxIPTV\backend\boxiptv.db 
+G:\PROJETOS-CODER\SITES\boxIPTV\backend\create_admin.py 
+G:\PROJETOS-CODER\SITES\boxIPTV\backend\database.py 
 G:\PROJETOS-CODER\SITES\boxIPTV\backend\main.py 
+G:\PROJETOS-CODER\SITES\boxIPTV\backend\models.py 
 G:\PROJETOS-CODER\SITES\boxIPTV\backend\package-lock.json 
 G:\PROJETOS-CODER\SITES\boxIPTV\backend\package.json 
 G:\PROJETOS-CODER\SITES\boxIPTV\backend\__pycache__ 
+G:\PROJETOS-CODER\SITES\boxIPTV\backend\__pycache__\database.cpython-314.pyc 
 G:\PROJETOS-CODER\SITES\boxIPTV\backend\__pycache__\main.cpython-314.pyc 
+G:\PROJETOS-CODER\SITES\boxIPTV\backend\__pycache__\models.cpython-314.pyc 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\eslint.config.js 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\index.html 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\package-lock.json 
@@ -22,5 +28,7 @@ G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\components
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\index.css 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\main.jsx 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\assets\react.svg 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\components\AdminPanel.jsx 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\components\Login.jsx 
 G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\components\Player.jsx 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\src\components\Playlists.jsx 

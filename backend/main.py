@@ -315,5 +315,28 @@ def get_filme_info(vod_id: int, server_url: str, user: str, passw: str):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Erro ao buscar info do filme: {str(e)}")
 
+@app.get("/api/epg", tags=["IPTV Proxy"])
+def get_epg(stream_id: int, server_url: str, user: str, passw: str):
+    cache_key = get_cache_key(server_url, user, f"epg_{stream_id}")
+    agora = time.time()
+    
+    # Cache de 15 minutos para a EPG (evita banimentos no servidor IPTV)
+    if cache_key in cache and (agora - cache[cache_key]["timestamp"] < 900):
+        return cache[cache_key]["data"]
+
+    # limit=10 traz apenas os últimos e próximos programas
+    api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action=get_short_epg&stream_id={stream_id}&limit=10"
+    
+    try:
+        response = requests.get(api_url, timeout=10)
+        response.raise_for_status()
+        dados = response.json()
+        
+        cache[cache_key] = {"data": dados, "timestamp": agora}
+        return dados
+    except Exception:
+        # Se a API falhar (muitos canais não têm EPG), retornamos uma lista vazia e evitamos que o ecrã quebre
+        return {"epg_listings": []}
+    
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8006, reload=True)
