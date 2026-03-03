@@ -715,41 +715,59 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                   )}
 
                   {modoCarrossel ? (
-                    Object.values(conteudoAgrupado).filter(grupo => grupo && Array.isArray(grupo.itens) && grupo.itens.length > 0).map((grupo, idx) => (
-                      <div key={idx} style={{ marginBottom: '40px' }}>
-                        <h3 style={{ color: '#fff', marginBottom: '15px', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ width: '4px', height: '20px', backgroundColor: '#e50914', borderRadius: '2px' }}></span>{grupo.nome}</h3>
-                        <div onMouseDown={handleMouseDown} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={handleMouseMove} style={{ display: 'flex', overflowX: 'auto', gap: '15px', paddingBottom: '15px', cursor: 'grab' }}>
-                          {(paresDestaque.length > 0 && idx === 0 ? grupo.itens.slice(paresDestaque.length * 2) : grupo.itens).map((item, index) => (
-                            <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} style={{ flex: '0 0 auto', width: tipoAtual === 'ao-vivo' ? '250px' : '180px', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333', transition: 'transform 0.3s' }}>
-                              <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
-                              <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
+                        Object.values(conteudoAgrupado).filter(grupo => grupo && Array.isArray(grupo.itens) && grupo.itens.length > 0).map((grupo, idx) => (
+                            <div key={idx} style={{ marginBottom: '40px' }}>
+                            <h3 style={{ color: '#fff', marginBottom: '15px', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ width: '4px', height: '20px', backgroundColor: '#e50914', borderRadius: '2px' }}></span>{grupo.nome}</h3>
+                            <div onMouseDown={handleMouseDown} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={handleMouseMove} style={{ display: 'flex', overflowX: 'auto', gap: '15px', paddingBottom: '15px', cursor: 'grab' }}>
+                                {(paresDestaque.length > 0 && idx === 0 ? grupo.itens.slice(paresDestaque.length * 2) : grupo.itens).map((item, index) => (
+                                <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
+                                    style={{ position: 'relative', flex: '0 0 auto', width: tipoAtual === 'ao-vivo' ? '250px' : '180px', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333', transition: 'transform 0.3s' }}>
+                                    
+                                    {/* INÍCIO DO SELO (CARROSSEL) */}
+                                    {item?.rating && item.rating !== "0" && item.rating !== 0 && (
+                                    <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
+                                        <Star size={12} fill="currentColor" /> {item.rating}
+                                    </div>
+                                    )}
+                                    
+                                    <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
+                                    <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
+                                </div>
+                                ))}
                             </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <>
-                      {conteudoParaExibir.length === 0 ? (
-                        <p style={{ textAlign: 'center', color: '#aaa', marginTop: '50px' }}>Nenhum conteúdo encontrado nesta vista.</p>
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
-                          {conteudoParaExibir.map((item, index) => (
-                            <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} style={{ background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
-                              <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
-                              <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
                             </div>
-                          ))}
-                        </div>
-                      )}
-                      
-                      {categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' && conteudoParaExibir.length < conteudoSeguro.filter(item => String(item?.category_id) === String(categoriaSelecionada)).length && (
-                        <div style={{ textAlign: 'center', marginTop: '30px' }}>
-                          <button tabIndex={0} className="tv-focusable" onClick={() => setLimite(limite + 50)} style={{ padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px' }}>Carregar mais da categoria</button>
-                        </div>
-                      )}
-                    </>
-                  )}
+                        ))
+                        ) : (
+                        <>
+                            {conteudoParaExibir.length === 0 ? (
+                            <p style={{ textAlign: 'center', color: '#aaa', marginTop: '50px' }}>Nenhum conteúdo encontrado nesta vista.</p>
+                            ) : (
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+                                {conteudoParaExibir.map((item, index) => (
+                                <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
+                                    style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
+                                    
+                                    {/* INÍCIO DO SELO (GRELHA PRINCIPAL) */}
+                                    {item?.rating && item.rating !== "0" && item.rating !== 0 && (
+                                    <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
+                                        <Star size={12} fill="currentColor" /> {item.rating}
+                                    </div>
+                                    )}
+
+                                    <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
+                                    <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
+                                </div>
+                                ))}
+                            </div>
+                            )}
+                            
+                            {categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' && conteudoParaExibir.length < conteudoSeguro.filter(item => String(item?.category_id) === String(categoriaSelecionada)).length && (
+                            <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                                <button tabIndex={0} className="tv-focusable" onClick={() => setLimite(limite + 50)} style={{ padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px' }}>Carregar mais da categoria</button>
+                            </div>
+                            )}
+                        </>
+                        )}
                 </>
               )}
             </>

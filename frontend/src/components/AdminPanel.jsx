@@ -1,5 +1,12 @@
 import { useState, useEffect } from 'react';
-import { UserCheck, UserX, Plus, Search, Users, Activity, AlertCircle, Trash2, Settings } from 'lucide-react'; // Added Settings here
+import { 
+  UserCheck, UserX, Plus, Search, Users, Activity, AlertCircle, 
+  Trash2, Settings, List, Edit, Save, X 
+} from 'lucide-react';
+
+const estiloInput = {
+  width: '100%', padding: '12px', background: '#000', border: '1px solid #444', color: 'white', borderRadius: '5px', boxSizing: 'border-box', outline: 'none'
+};
 
 export default function AdminPanel({ token, onVoltar }) {
   const [usuarios, setUsuarios] = useState([]);
@@ -8,6 +15,18 @@ export default function AdminPanel({ token, onVoltar }) {
   const [diasInput, setDiasInput] = useState({});
   const [termoPesquisa, setTermoPesquisa] = useState('');
 
+  // ESTADOS PARA GESTÃO DE PLAYLISTS
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState(null);
+  const [playlistsUsuario, setPlaylistsUsuario] = useState([]);
+  const [editandoPlaylist, setEditandoPlaylist] = useState(null);
+  
+  // NOVO: Estados para criar uma Playlist Nova
+  const [mostrarFormNova, setMostrarFormNova] = useState(false);
+  const [novaPlaylist, setNovaPlaylist] = useState({ name: '', server_url: '', iptv_username: '', iptv_password: '' });
+
+  // ==========================================
+  // FUNÇÕES DE UTILIZADORES
+  // ==========================================
   const carregarUsuarios = async () => {
     setCarregando(true);
     try {
@@ -16,16 +35,9 @@ export default function AdminPanel({ token, onVoltar }) {
       });
       const data = await res.json();
       
-      if (!res.ok) {
-        throw new Error(data.detail || 'Falha ao carregar utilizadores.');
-      }
-      
-      if (Array.isArray(data)) {
-        setUsuarios(data);
-      } else {
-        setUsuarios([]);
-        setMensagem({ tipo: 'erro', texto: 'Formato de dados inválido recebido do servidor.' });
-      }
+      if (!res.ok) throw new Error(data.detail || 'Falha ao carregar utilizadores.');
+      if (Array.isArray(data)) setUsuarios(data);
+      else throw new Error('Formato de dados inválido.');
     } catch (err) {
       setMensagem({ tipo: 'erro', texto: err.message });
       setUsuarios([]); 
@@ -34,106 +46,147 @@ export default function AdminPanel({ token, onVoltar }) {
     }
   };
 
-  useEffect(() => {
-    carregarUsuarios();
-  }, [token]);
+  useEffect(() => { carregarUsuarios(); }, [token]);
 
   const handleAdicionarDias = async (userId) => {
     const dias = parseInt(diasInput[userId] || 0);
-    if (dias <= 0 || isNaN(dias)) {
-      setMensagem({ tipo: 'erro', texto: 'Insira um valor válido de dias.' });
-      return;
-    }
-
+    if (dias <= 0 || isNaN(dias)) return;
     try {
-      setMensagem({ tipo: '', texto: '' });
       const res = await fetch(`http://localhost:8006/api/admin/users/${userId}/premium`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ dias_adicionais: dias })
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Erro ao atualizar o período premium.');
-
-      setMensagem({ tipo: 'sucesso', texto: data.message });
-      setDiasInput(prev => ({ ...prev, [userId]: '' }));
-      carregarUsuarios();
-      setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
-    } catch (err) {
-      setMensagem({ tipo: 'erro', texto: err.message });
-    }
+      if (res.ok) {
+        setMensagem({ tipo: 'sucesso', texto: 'Premium atualizado!' });
+        setDiasInput(prev => ({ ...prev, [userId]: '' }));
+        carregarUsuarios();
+        setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
+      }
+    } catch (err) {}
   };
 
   const handleToggleStatus = async (userId, statusAtual) => {
     const novoStatus = statusAtual === 'Ativo' ? 'Desabilitado' : 'Ativo';
     if (!window.confirm(`Tem certeza que deseja alterar o status para ${novoStatus}?`)) return;
-
     try {
-      setMensagem({ tipo: '', texto: '' });
       const res = await fetch(`http://localhost:8006/api/admin/users/${userId}/status`, {
         method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: novoStatus })
       });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || 'Erro ao alterar status do usuário.');
-
-      setMensagem({ tipo: 'sucesso', texto: data.message });
-      carregarUsuarios();
-      setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
-    } catch (err) {
-      setMensagem({ tipo: 'erro', texto: err.message });
-    }
+      if (res.ok) carregarUsuarios();
+    } catch (err) {}
   };
 
   const handleApagarUsuario = async (userId, username) => {
     if (!window.confirm(`ATENÇÃO: Deseja apagar permanentemente o utilizador ${username || 'Desconhecido'} e todas as suas playlists?`)) return;
-
     try {
-      setMensagem({ tipo: '', texto: '' });
       const res = await fetch(`http://localhost:8006/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
-
-      if (!res.ok) {
-          const data = await res.json();
-          throw new Error(data.detail || 'Erro ao apagar utilizador.');
+      if (res.ok) {
+        setMensagem({ tipo: 'sucesso', texto: 'Utilizador apagado com sucesso.' });
+        carregarUsuarios();
+        setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
       }
-      
-      setMensagem({ tipo: 'sucesso', texto: 'Utilizador apagado com sucesso.' });
-      carregarUsuarios();
-      setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
-    } catch (err) {
-      setMensagem({ tipo: 'erro', texto: err.message });
+    } catch (err) {}
+  };
+
+  // ==========================================
+  // FUNÇÕES DE PLAYLISTS
+  // ==========================================
+  const abrirGerenciadorPlaylists = async (user) => {
+    setUsuarioSelecionado(user);
+    setEditandoPlaylist(null); 
+    setMostrarFormNova(false); // Reseta o form novo
+    try {
+      const res = await fetch(`http://localhost:8006/api/admin/users/${user.id}/playlists`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      setPlaylistsUsuario(data);
+    } catch (e) {
+      setMensagem({ tipo: 'erro', texto: 'Erro ao carregar listas do utilizador.' });
     }
+  };
+
+  const deletarPlaylistAdmin = async (playlistId) => {
+    if (!window.confirm("Remover esta playlist permanentemente?")) return;
+    try {
+      const res = await fetch(`http://localhost:8006/api/admin/playlists/${playlistId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setMensagem({ tipo: 'sucesso', texto: 'Playlist removida.' });
+        abrirGerenciadorPlaylists(usuarioSelecionado);
+        setTimeout(() => setMensagem({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (e) {}
+  };
+
+  const iniciarEdicao = (pl) => {
+    setMostrarFormNova(false);
+    setEditandoPlaylist({
+      id: pl.id,
+      name: pl.name || '',
+      server_url: pl.server_url || '',
+      iptv_username: pl.iptv_username || '',
+      iptv_password: pl.iptv_password || ''
+    });
+  };
+
+  const salvarEdicaoPlaylist = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`http://localhost:8006/api/admin/playlists/${editandoPlaylist.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(editandoPlaylist)
+      });
+      if (res.ok) {
+        setMensagem({ tipo: 'sucesso', texto: 'Playlist atualizada com sucesso!' });
+        setEditandoPlaylist(null);
+        abrirGerenciadorPlaylists(usuarioSelecionado);
+        setTimeout(() => setMensagem({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (e) {}
+  };
+
+  // NOVO: Função para salvar playlist nova
+  const salvarNovaPlaylist = async (e) => {
+    e.preventDefault();
+    try {
+      const res = await fetch(`http://localhost:8006/api/admin/users/${usuarioSelecionado.id}/playlists`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+        body: JSON.stringify(novaPlaylist)
+      });
+      if (res.ok) {
+        setMensagem({ tipo: 'sucesso', texto: 'Nova playlist adicionada ao cliente!' });
+        setMostrarFormNova(false);
+        setNovaPlaylist({ name: '', server_url: '', iptv_username: '', iptv_password: '' }); // Limpa o formulário
+        abrirGerenciadorPlaylists(usuarioSelecionado);
+        setTimeout(() => setMensagem({ tipo: '', texto: '' }), 3000);
+      }
+    } catch (e) {}
   };
 
   const formatarData = (dataString) => {
-    if (!dataString) return 'Data Inválida';
+    if (!dataString) return '---';
     try {
         const data = new Date(dataString);
         return data.toLocaleDateString('pt-BR') + ' às ' + data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    } catch (e) {
-        return 'Data Inválida';
-    }
+    } catch (e) { return '---'; }
   };
 
   const listaSegura = Array.isArray(usuarios) ? usuarios : [];
-  
   const usuariosFiltrados = listaSegura.filter(user => {
     const nome = user?.username || ''; 
     const idStr = user?.id ? user.id.toString() : '';
     const termo = (termoPesquisa || '').toLowerCase();
-    
     return nome.toLowerCase().includes(termo) || idStr.includes(termo);
   });
 
@@ -150,7 +203,7 @@ export default function AdminPanel({ token, onVoltar }) {
           <h1 style={{ color: '#e50914', margin: 0, display: 'flex', alignItems: 'center', gap: '10px' }}>
             <Settings size={28} /> Painel de Administração
           </h1>
-          <p style={{ color: '#aaa', margin: '5px 0 0 0' }}>Gestão de Contas e Acessos</p>
+          <p style={{ color: '#aaa', margin: '5px 0 0 0' }}>Gestão de Contas e Playlists</p>
         </div>
         <button className="tv-focusable" onClick={onVoltar} style={{ padding: '10px 20px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
           ⬅ Voltar ao Início
@@ -270,16 +323,26 @@ export default function AdminPanel({ token, onVoltar }) {
                       </td>
                       <td style={{ padding: '15px', textAlign: 'right' }}>
                         <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                          
+                          <button 
+                            onClick={() => abrirGerenciadorPlaylists(user)}
+                            className="tv-focusable"
+                            style={{ padding: '8px', border: 'none', borderRadius: '5px', cursor: 'pointer', backgroundColor: '#444', color: 'white' }}
+                            title="Gerir Playlists"
+                          >
+                            <List size={18} />
+                          </button>
+
                           <button 
                             onClick={() => handleToggleStatus(user.id, user.status)}
                             className="tv-focusable"
                             style={{ 
                               padding: '8px 15px', border: 'none', borderRadius: '5px', cursor: 'pointer',
-                              backgroundColor: user.status === 'Ativo' ? '#444' : '#e50914',
+                              backgroundColor: user.status === 'Ativo' ? '#333' : '#e50914',
                               color: 'white', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px'
                             }}
                           >
-                            {user.status === 'Ativo' ? <><UserX size={16} /> Bloquear</> : <><UserCheck size={16} /> Ativar</>}
+                            {user.status === 'Ativo' ? <UserX size={16} /> : <UserCheck size={16} />}
                           </button>
                           
                           <button 
@@ -306,6 +369,101 @@ export default function AdminPanel({ token, onVoltar }) {
           )}
         </div>
       </div>
+
+      {/* ========================================== */}
+      {/* MODAL: GERENCIADOR DE PLAYLISTS            */}
+      {/* ========================================== */}
+      {usuarioSelecionado && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: '#222', width: '100%', maxWidth: '600px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+            
+            {/* CABEÇALHO DO MODAL COM BOTÃO + NOVA LISTA */}
+            <div style={{ padding: '20px', background: '#333', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <List size={20} color="#e50914" /> Listas de {usuarioSelecionado.username}
+              </h2>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {!mostrarFormNova && !editandoPlaylist && (
+                  <button className="tv-focusable" onClick={() => setMostrarFormNova(true)} style={{ display: 'flex', alignItems: 'center', gap: '5px', background: '#00C851', border: 'none', color: 'white', padding: '8px 15px', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold', fontSize: '13px' }}>
+                    <Plus size={16} /> Nova Lista
+                  </button>
+                )}
+                <button className="tv-focusable" onClick={() => setUsuarioSelecionado(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={24} /></button>
+              </div>
+            </div>
+            
+            <div style={{ padding: '20px', maxHeight: '70vh', overflowY: 'auto' }}>
+              
+              {/* FORMULÁRIO DE NOVA PLAYLIST */}
+              {mostrarFormNova && (
+                <div style={{ background: '#1a1a1a', padding: '20px', borderRadius: '8px', border: '1px dashed #00C851', marginBottom: '20px' }}>
+                  <h3 style={{ marginTop: 0, color: '#00C851', fontSize: '16px' }}>Adicionar Nova Playlist</h3>
+                  <form onSubmit={salvarNovaPlaylist} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <input type="text" value={novaPlaylist.name} onChange={e => setNovaPlaylist({...novaPlaylist, name: e.target.value})} style={estiloInput} placeholder="Nome da Lista" required />
+                    <input type="url" value={novaPlaylist.server_url} onChange={e => setNovaPlaylist({...novaPlaylist, server_url: e.target.value})} style={estiloInput} placeholder="URL do Servidor (ex: http://servidor.com)" required />
+                    <div style={{ display: 'flex', gap: '12px' }}>
+                      <input type="text" value={novaPlaylist.iptv_username} onChange={e => setNovaPlaylist({...novaPlaylist, iptv_username: e.target.value})} style={estiloInput} placeholder="Usuário IPTV" required />
+                      <input type="text" value={novaPlaylist.iptv_password} onChange={e => setNovaPlaylist({...novaPlaylist, iptv_password: e.target.value})} style={estiloInput} placeholder="Senha IPTV" required />
+                    </div>
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                      <button type="submit" className="tv-focusable" style={{ flex: 1, background: '#00C851', border: 'none', color: 'white', padding: '12px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer' }}>Salvar Playlist</button>
+                      <button type="button" className="tv-focusable" onClick={() => setMostrarFormNova(false)} style={{ flex: 1, background: '#444', border: 'none', color: 'white', padding: '12px', borderRadius: '5px', cursor: 'pointer' }}>Cancelar</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              {playlistsUsuario.length === 0 && !mostrarFormNova ? (
+                <p style={{ color: '#888', textAlign: 'center', padding: '20px' }}>Este utilizador ainda não cadastrou nenhuma playlist.</p> 
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  {playlistsUsuario.map(pl => (
+                    <div key={pl.id} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '8px', border: '1px solid #333' }}>
+                      
+                      {/* FORMULÁRIO DE EDIÇÃO */}
+                      {editandoPlaylist?.id === pl.id ? (
+                        <form onSubmit={salvarEdicaoPlaylist} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                          <input type="text" value={editandoPlaylist.name || ''} onChange={e => setEditandoPlaylist({...editandoPlaylist, name: e.target.value})} style={estiloInput} placeholder="Nome da Lista" required />
+                          <input type="url" value={editandoPlaylist.server_url || ''} onChange={e => setEditandoPlaylist({...editandoPlaylist, server_url: e.target.value})} style={estiloInput} placeholder="URL do Servidor" required />
+                          <div style={{ display: 'flex', gap: '12px' }}>
+                            <input type="text" value={editandoPlaylist.iptv_username || ''} onChange={e => setEditandoPlaylist({...editandoPlaylist, iptv_username: e.target.value})} style={estiloInput} placeholder="Usuário IPTV" required />
+                            <input type="text" value={editandoPlaylist.iptv_password || ''} onChange={e => setEditandoPlaylist({...editandoPlaylist, iptv_password: e.target.value})} style={estiloInput} placeholder="Senha IPTV" required />
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                            <button type="submit" className="tv-focusable" style={{ flex: 1, background: '#0056b3', border: 'none', color: 'white', padding: '12px', borderRadius: '5px', fontWeight: 'bold', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '5px' }}>
+                              <Save size={18} /> Salvar Edição
+                            </button>
+                            <button type="button" className="tv-focusable" onClick={() => setEditandoPlaylist(null)} style={{ flex: 1, background: '#444', border: 'none', color: 'white', padding: '12px', borderRadius: '5px', cursor: 'pointer' }}>Cancelar</button>
+                          </div>
+                        </form>
+                      ) : (
+                        
+                        /* MODO VISUALIZAÇÃO DA PLAYLIST */
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#fff', marginBottom: '5px' }}>{pl.name}</div>
+                            <div style={{ fontSize: '12px', color: '#888', marginBottom: '3px' }}><strong>URL:</strong> {pl.server_url}</div>
+                            <div style={{ fontSize: '12px', color: '#888' }}><strong>User:</strong> {pl.iptv_username}</div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '10px' }}>
+                            <button className="tv-focusable" onClick={() => iniciarEdicao(pl)} style={{ background: '#333', border: '1px solid #444', color: 'white', padding: '10px', borderRadius: '5px', cursor: 'pointer' }} title="Editar">
+                              <Edit size={18} />
+                            </button>
+                            <button className="tv-focusable" onClick={() => deletarPlaylistAdmin(pl.id)} style={{ background: 'transparent', border: '1px solid #ff4444', color: '#ff4444', padding: '10px', borderRadius: '5px', cursor: 'pointer' }} title="Apagar">
+                              <Trash2 size={18} />
+                            </button>
+                          </div>
+                        </div>
+
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

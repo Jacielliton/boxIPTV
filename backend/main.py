@@ -389,6 +389,56 @@ def deletar_usuario(user_id: int, admin: models.User = Depends(get_current_admin
     db.commit()
     
     return {"message": "Utilizador apagado permanentemente."}
+# ==========================================
+# ROTAS ADMIN: GESTÃO DE PLAYLISTS DE USUÁRIOS
+# ==========================================
+
+@app.get("/api/admin/users/{user_id}/playlists", tags=["Admin"])
+def admin_listar_playlists_usuario(user_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    playlists = db.query(models.Playlist).filter(models.Playlist.user_id == user_id).all()
+    return playlists
+
+@app.put("/api/admin/playlists/{playlist_id}", tags=["Admin"])
+def admin_editar_playlist(playlist_id: int, update_data: PlaylistCreate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist não encontrada")
+    
+    playlist.name = update_data.name
+    playlist.server_url = update_data.server_url.rstrip('/')
+    playlist.iptv_username = update_data.iptv_username
+    playlist.iptv_password = update_data.iptv_password
+    
+    db.commit()
+    return {"message": "Playlist atualizada com sucesso!"}
+
+@app.delete("/api/admin/playlists/{playlist_id}", tags=["Admin"])
+def admin_remover_playlist(playlist_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist não encontrada")
+    
+    db.delete(playlist)
+    db.commit()
+    return {"message": "Playlist removida pelo administrador."}
+@app.post("/api/admin/users/{user_id}/playlists", tags=["Admin"])
+def admin_criar_playlist(user_id: int, playlist_data: PlaylistCreate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    # Verifica se o utilizador existe
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    # Cria a nova playlist para esse utilizador
+    nova_playlist = models.Playlist(
+        name=playlist_data.name,
+        server_url=playlist_data.server_url.rstrip('/'),
+        iptv_username=playlist_data.iptv_username,
+        iptv_password=playlist_data.iptv_password,
+        user_id=user_id
+    )
+    db.add(nova_playlist)
+    db.commit()
+    return {"message": "Playlist adicionada com sucesso ao utilizador!"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8006, reload=True)
