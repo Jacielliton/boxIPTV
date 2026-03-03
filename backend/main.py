@@ -46,7 +46,8 @@ def get_password_hash(password: str):
     hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed_bytes.decode('utf-8')
 
-def create_access_token(data: dict, expires_delta: timedelta = timedelta(hours=24)):
+# AQUI ESTÁ A MÁGICA: Alterado de hours=24 para days=3650 (10 anos)
+def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=3650)):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
     to_encode.update({"exp": expire})
