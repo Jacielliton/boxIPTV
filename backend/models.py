@@ -12,7 +12,7 @@ class User(Base):
     is_admin = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     premium_until = Column(DateTime, default=lambda: datetime.utcnow() + timedelta(days=7)) # 7 dias free
-    
+    is_active = Column(Boolean, default=True)
     playlists = relationship("Playlist", back_populates="owner")
 
 class Playlist(Base):

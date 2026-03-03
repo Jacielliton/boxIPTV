@@ -1,35 +1,46 @@
-/* =========================================
-   ESTRUTURA BASE
-   ========================================= */
-#root {
-  max-width: 100%;
-  margin: 0 auto;
-  text-align: left;
+/* ==========================================================================
+   1. RESET GLOBAL E ANIQUILAÇÃO ABSOLUTA DA BARRA DE ROLAGEM
+   ========================================================================== */
+*::-webkit-scrollbar, 
+body::-webkit-scrollbar, 
+html::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
+  -webkit-appearance: none !important;
+}
+
+* {
+  -ms-overflow-style: none !important;  /* IE e Edge */
+  scrollbar-width: none !important;     /* Firefox */
+  box-sizing: border-box;
 }
 
 body, html {
   margin: 0;
   padding: 0;
   background-color: #141414;
-  overflow-x: hidden; /* Evita que a página inteira balance para os lados */
+  color: white;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  overflow-x: hidden; 
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
+#root {
+  max-width: 100%;
+  margin: 0 auto;
 }
 
-/* =========================================
-   NAVEGAÇÃO PARA COMANDO DE TV (SMART TV)
-   ========================================= */
+/* ==========================================================================
+   2. MOTOR DE FOCO PARA SMART TV E NAVEGAÇÃO DESKTOP
+   ========================================================================== */
 .tv-focusable {
   outline: none;
-  transition: transform 0.2s, outline 0.1s;
+  transition: transform 0.2s ease, outline 0.1s ease, box-shadow 0.2s ease;
 }
 
-.tv-focusable:focus, .tv-focusable:hover {
+.tv-focusable:focus, 
+.tv-focusable:hover {
   outline: 3px solid white !important;
   outline-offset: 2px;
   transform: scale(1.05);
@@ -37,106 +48,103 @@ body, html {
   box-shadow: 0 10px 20px rgba(0,0,0,0.8);
 }
 
-/* =========================================
-   SCROLLBAR PREMIUM GLOBAL (DARK THEME)
-   ========================================= */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+/* Tratamento especial para o Banner Duplo na TV (para não distorcer) */
+.banner-focusable:focus, 
+.banner-focusable:hover {
+  outline: 3px solid white !important;
+  outline-offset: 2px;
+  transform: scale(1.02) !important; /* Menor escala para itens gigantes */
+  z-index: 10;
 }
 
-::-webkit-scrollbar-track {
-  background: #141414;
+.banner-focusable:focus button, 
+.banner-focusable:hover button {
+  background-color: #e50914 !important;
+  color: white !important;
 }
 
-::-webkit-scrollbar-thumb {
-  background: #333;
-  border-radius: 4px;
+/* ==========================================================================
+   3. COMPONENTES MOBILE (APP MOBILE)
+   ========================================================================== */
+
+/* Ocultar barra de rolagem horizontal nos carrosséis de categorias */
+.hide-scroll {
+  overflow-x: auto;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scroll::-webkit-scrollbar {
+  display: none;
 }
 
-::-webkit-scrollbar-thumb:hover {
-  background: #e50914; 
+/* Modal de Detalhes do Mobile (Abre de baixo para cima) */
+.bottom-sheet {
+  position: fixed; 
+  bottom: 0; 
+  left: 0; 
+  width: 100%; 
+  height: 85vh; 
+  background: #1a1a1a;
+  border-top-left-radius: 20px; 
+  border-top-right-radius: 20px; 
+  z-index: 1000;
+  box-shadow: 0 -5px 25px rgba(0,0,0,0.9); 
+  display: flex; 
+  flex-direction: column;
+  transform: translateY(100%); 
+  animation: slideUp 0.3s forwards cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-* {
-  scrollbar-width: thin;
-  scrollbar-color: #333 #141414;
+/* ==========================================================================
+   4. ANIMAÇÕES E ESTADOS VISUAIS
+   ========================================================================== */
+
+/* Animação do Bottom Sheet */
+@keyframes slideUp { 
+  to { transform: translateY(0); } 
 }
 
-/* =========================================
-   OCULTAR BARRA NOS CARROSSÉIS HORIZONTAIS
-   ========================================= */
-.hide-scrollbar::-webkit-scrollbar {
-  display: none !important;
-  width: 0 !important;
-  height: 0 !important;
-  -webkit-appearance: none !important;
+/* Esqueleto de Carregamento (Shimmer Effect) */
+@keyframes shimmer { 
+  0% { background-position: -200px 0; } 
+  100% { background-position: calc(200px + 100%) 0; } 
 }
 
-.hide-scrollbar {
-  -ms-overflow-style: none !important;  
-  scrollbar-width: none !important;     
+.skeleton-loader { 
+  background-image: linear-gradient(90deg, #222 0px, #333 40px, #222 80px); 
+  background-size: 200px 100%; 
+  animation: shimmer 1.5s infinite linear; 
 }
 
-/* ========================================================
-   DESIGN RESPONSIVO (CELULARES E TABLETS)
-   ======================================================== */
-@media (max-width: 900px) {
-  .main-layout { flex-direction: column !important; }
-  
-  /* Oculta/Minimiza a barra lateral no mobile e FIXA NO TOPO */
-  .sidebar-container { 
-    width: 100% !important; 
-    height: auto !important; 
-    position: sticky !important; 
-    top: 0 !important; 
-    z-index: 999 !important;
-    padding: 10px !important;
-    background-color: rgba(34, 34, 34, 0.98) !important;
-    backdrop-filter: blur(10px);
-    border-bottom: 1px solid #444;
+/* Ícone de Refresh Rodando */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Fade In Suave para Formulários e Modais */
+@keyframes fadeIn { 
+  from { opacity: 0; transform: translateY(10px); } 
+  to { opacity: 1; transform: translateY(0); } 
+}
+
+/* ==========================================================================
+   5. AJUSTES RESPONSIVOS PARA COMPONENTES PARTILHADOS (ADMIN / PLAYLIST)
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* Garante que o painel de admin não "esmague" em telas touch */
+  .admin-header-mobile {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 15px;
   }
-
-  /* Oculta o título "Menu" */
-  .sidebar-container h3 { display: none !important; }
   
-  /* Altera as listas verticais para carrosséis horizontais flexíveis */
-  .sidebar-menus { 
-    display: flex !important; 
-    overflow-x: auto !important; 
-    flex-direction: row !important; 
-    padding-bottom: 5px !important; 
-    border-bottom: none !important;
-    margin-bottom: 0 !important;
+  /* Ajuste no padding geral das páginas partilhadas */
+  .shared-page-container {
+    padding: 20px 15px !important;
   }
-  .sidebar-menus li { 
-    flex: 0 0 auto !important; 
-    margin-bottom: 0 !important; 
-    margin-right: 10px !important; 
-    white-space: nowrap;
-    padding: 8px 10px !important;
-  }
-  
-  /* Ajuste do topo (Top Nav que agora contém os botões e os dados de perfil) */
-  .top-nav { flex-direction: column !important; justify-content: center !important; gap: 15px !important; }
-  .type-selectors-buttons { justify-content: center !important; width: 100%; flex-wrap: wrap !important; }
-  .top-nav-user-controls { justify-content: center !important; width: 100%; flex-wrap: wrap !important; }
-  
-  .search-input-container { margin-bottom: 10px !important; }
-  
-  /* Painel de detalhes empilhado e centralizado */
-  .detail-view { flex-direction: column !important; align-items: center !important; text-align: center !important; padding: 20px !important; }
-  .detail-view-info { min-width: 100% !important; }
-  .detail-view-buttons { width: 100% !important; align-items: center !important; justify-content: center !important; }
-  
-  /* Banners Diminuídos para Mobile */
-  .hero-banner-container { height: 300px !important; marginBottom: 20px !important; }
-  .hero-banner-wrapper { flex-direction: column !important; gap: 10px !important; }
-  .hero-banner-item { height: 140px !important; padding: 15px !important; justify-content: center !important; align-items: center !important; text-align: center !important;}
-  .hero-banner-item h1 { font-size: 1.3rem !important; margin-bottom: 5px !important; display: -webkit-box; -webkit-line-clamp: 1; -webkit-box-orient: vertical; overflow: hidden;}
-  .hero-banner-item button { padding: 6px 12px !important; font-size: 13px !important; }
-  .hero-banner-item span { font-size: 9px !important; padding: 3px 8px !important; margin-bottom: 5px !important; }
-  
-  /* Esconder botão de subir pois a lista já está horizontal e fixa no topo */
-  .btn-voltar-topo { display: none !important; }
 }

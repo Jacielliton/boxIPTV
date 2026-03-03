@@ -10,12 +10,11 @@ import requests
 import uvicorn
 import time
 
-# Importações do seu banco de dados (certifique-se de que database.py e models.py estão na mesma pasta)
+# Importações do seu banco de dados
 import models
 from database import engine, get_db
 
 # 1. INICIALIZAÇÃO E CONFIGURAÇÃO
-# Cria as tabelas no SQLite se não existirem
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="BoxIPTV Pro")
@@ -28,7 +27,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# O Cache para as rotas IPTV antigas
 cache = {}
 CACHE_TTL = 3600  # 1 hora
 
@@ -36,16 +34,14 @@ def get_cache_key(server_url, username, tipo):
     return f"{server_url}_{username}_{tipo}"
 
 # 2. CONFIGURAÇÕES DE SEGURANÇA E JWT
-SECRET_KEY = "chave-super-secreta-mude-em-producao" # Troque isso quando for para a VPS
+SECRET_KEY = "chave-super-secreta-mude-em-producao"
 ALGORITHM = "HS256"
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/login")
 
 def verify_password(plain_password: str, hashed_password: str):
-    # O bcrypt compara os bytes, por isso fazemos o encode
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 def get_password_hash(password: str):
-    # Gera o salt e o hash em bytes, depois descodifica para string para gravar no SQLite
     salt = bcrypt.gensalt()
     hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed_bytes.decode('utf-8')
@@ -73,6 +69,10 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     user = db.query(models.User).filter(models.User.username == username).first()
     if user is None:
         raise credenciais_exception
+
+    # NOVA VALIDAÇÃO: Bloqueia acesso à API se a conta foi desabilitada
+    if hasattr(user, 'is_active') and not user.is_active:
+        raise HTTPException(status_code=403, detail="Sua conta foi desabilitada pelo administrador.")
         
     # Bloqueia se não for admin e o premium expirou
     if not user.is_admin and datetime.utcnow() > user.premium_until:
@@ -86,7 +86,7 @@ def get_current_admin(current_user: models.User = Depends(get_current_user)):
     return current_user
 
 
-# 3. SCHEMAS DO PYDANTIC (Para validar entrada de dados)
+# 3. SCHEMAS DO PYDANTIC
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -104,9 +104,13 @@ class PlaylistCreate(BaseModel):
 class PremiumUpdate(BaseModel):
     dias_adicionais: int
 
+# NOVO SCHEMA PARA STATUS
+class StatusUpdate(BaseModel):
+    status: str
+
 
 # ==========================================
-# ROTAS DO SISTEMA (NOVAS)
+# ROTAS DO SISTEMA
 # ==========================================
 
 @app.post("/api/register", tags=["Autenticação"])
@@ -129,6 +133,10 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
     
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Credenciais incorretas")
+
+    # NOVA VALIDAÇÃO NO LOGIN
+    if hasattr(user, 'is_active') and not user.is_active:
+        raise HTTPException(status_code=403, detail="Conta desabilitada pelo administrador.")
         
     if not user.is_admin and datetime.utcnow() > user.premium_until:
         raise HTTPException(status_code=403, detail="Seu período premium expirou.")
@@ -144,7 +152,6 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
 @app.post("/api/playlists", tags=["Playlists"])
 def adicionar_playlist(playlist: PlaylistCreate, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     url_limpa = playlist.server_url.rstrip('/')
-    
     nova_playlist = models.Playlist(
         name=playlist.name,
         server_url=url_limpa,
@@ -164,21 +171,31 @@ def listar_playlists(current_user: models.User = Depends(get_current_user), db: 
 
 
 # ==========================================
-# ROTAS DO PAINEL ADMIN (NOVAS)
+# ROTAS DO PAINEL ADMIN
 # ==========================================
 
 @app.get("/api/admin/users", tags=["Admin"])
 def listar_usuarios(admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
     users = db.query(models.User).all()
-    return [
-        {
+    
+    resultado = []
+    for u in users:
+        # Lógica inteligente de status visual
+        status_atual = "Ativo"
+        if hasattr(u, 'is_active') and not u.is_active:
+            status_atual = "Desabilitado"
+        elif u.premium_until < datetime.utcnow() and not u.is_admin:
+            status_atual = "Expirado"
+            
+        resultado.append({
             "id": u.id,
             "username": u.username,
             "premium_until": u.premium_until,
             "is_admin": u.is_admin,
-            "status": "Ativo" if u.premium_until > datetime.utcnow() else "Expirado"
-        } for u in users
-    ]
+            "status": status_atual
+        })
+        
+    return resultado
 
 @app.put("/api/admin/users/{user_id}/premium", tags=["Admin"])
 def adicionar_dias_premium(user_id: int, update_data: PremiumUpdate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
@@ -192,9 +209,22 @@ def adicionar_dias_premium(user_id: int, update_data: PremiumUpdate, admin: mode
     db.commit()
     return {"message": f"Adicionado {update_data.dias_adicionais} dias para {user.username}. Válido até {user.premium_until.strftime('%d/%m/%Y')}"}
 
+# NOVA ROTA: ALTERAR STATUS
+@app.put("/api/admin/users/{user_id}/status", tags=["Admin"])
+def alterar_status_usuario(user_id: int, update_data: StatusUpdate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    # Altera no banco de dados
+    user.is_active = (update_data.status == "Ativo")
+    db.commit()
+    
+    return {"message": f"Status de {user.username} alterado para {update_data.status}!"}
+
 
 # ==========================================
-# ROTAS ANTIGAS DE PROXY IPTV (MANTIDAS)
+# ROTAS DE PROXY IPTV
 # ==========================================
 
 @app.get("/api/auth", tags=["IPTV Proxy"])
@@ -320,11 +350,9 @@ def get_epg(stream_id: int, server_url: str, user: str, passw: str):
     cache_key = get_cache_key(server_url, user, f"epg_{stream_id}")
     agora = time.time()
     
-    # Cache de 15 minutos para a EPG (evita banimentos no servidor IPTV)
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < 900):
         return cache[cache_key]["data"]
 
-    # limit=10 traz apenas os últimos e próximos programas
     api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action=get_short_epg&stream_id={stream_id}&limit=10"
     
     try:
@@ -335,8 +363,31 @@ def get_epg(stream_id: int, server_url: str, user: str, passw: str):
         cache[cache_key] = {"data": dados, "timestamp": agora}
         return dados
     except Exception:
-        # Se a API falhar (muitos canais não têm EPG), retornamos uma lista vazia e evitamos que o ecrã quebre
         return {"epg_listings": []}
     
+@app.delete("/api/playlists/{playlist_id}", tags=["Playlists"])
+def deletar_playlist(playlist_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
+    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id, models.Playlist.user_id == current_user.id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist não encontrada")
+    db.delete(playlist)
+    db.commit()
+    return {"message": "Playlist removida"}
+
+
+@app.delete("/api/admin/users/{user_id}", tags=["Admin"])
+def deletar_usuario(user_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    
+    if user.is_admin:
+        raise HTTPException(status_code=403, detail="Não é possível apagar a conta do administrador mestre.")
+        
+    db.delete(user)
+    db.commit()
+    
+    return {"message": "Utilizador apagado permanentemente."}
+
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8006, reload=True)
