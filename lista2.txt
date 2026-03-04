@@ -1,0 +1,7 @@
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\assets 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\cordova.js 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\cordova_plugins.js 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\index.html 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\vite.svg 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\assets\index-ByKEACTb.js 
+G:\PROJETOS-CODER\SITES\boxIPTV\frontend\android\app\src\main\assets\public\assets\index-CXRped4r.css 

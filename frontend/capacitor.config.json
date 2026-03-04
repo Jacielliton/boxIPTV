@@ -3,5 +3,7 @@
   "appName": "BoxIPTV Pro",
   "webDir": "dist",
   "bundledWebRuntime": false,
-  "server": { "cleartext": true }
+  "server": {
+    "cleartext": true
+  }
 }

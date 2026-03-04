@@ -23,12 +23,16 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost",
+        "https://localhost",
         "http://localhost:3000",
-        "http://localhost:3006", # Onde você está a testar agora
+        "https://localhost:3000",
+        "http://localhost:3006", 
+        "https://localhost:3006", 
         "http://localhost:5173",
+        "https://localhost:5173",
         "http://iptv.tecnopriv.top",
         "https://iptv.tecnopriv.top",
-        "capacitor://localhost",   # Permissão para o APK Android
+        "capacitor://localhost",
         "ionic://localhost"
     ],
     allow_credentials=True,
