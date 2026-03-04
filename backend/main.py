@@ -46,7 +46,6 @@ def get_password_hash(password: str):
     hashed_bytes = bcrypt.hashpw(password.encode('utf-8'), salt)
     return hashed_bytes.decode('utf-8')
 
-# AQUI ESTÁ A MÁGICA: Alterado de hours=24 para days=3650 (10 anos)
 def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=3650)):
     to_encode = data.copy()
     expire = datetime.utcnow() + expires_delta
@@ -71,13 +70,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     if user is None:
         raise credenciais_exception
 
-    # NOVA VALIDAÇÃO: Bloqueia acesso à API se a conta foi desabilitada
     if hasattr(user, 'is_active') and not user.is_active:
         raise HTTPException(status_code=403, detail="Sua conta foi desabilitada pelo administrador.")
         
-    # Bloqueia se não for admin e o premium expirou
-    if not user.is_admin and datetime.utcnow() > user.premium_until:
-         raise HTTPException(status_code=403, detail="Seu período premium expirou. Contate o suporte.")
+    # BLINDAGEM: Verifica se é None (nulo) antes de tentar comparar datas
+    if not user.is_admin:
+         if user.premium_until is None or datetime.utcnow() > user.premium_until:
+             raise HTTPException(status_code=403, detail="Seu período premium expirou. Contate o suporte.")
          
     return user
 
@@ -105,7 +104,6 @@ class PlaylistCreate(BaseModel):
 class PremiumUpdate(BaseModel):
     dias_adicionais: int
 
-# NOVO SCHEMA PARA STATUS
 class StatusUpdate(BaseModel):
     status: str
 
@@ -120,9 +118,11 @@ def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
     if db_user:
         raise HTTPException(status_code=400, detail="Usuário já registrado")
     
+    # Dá os 7 dias grátis fisicamente na base de dados
     novo_usuario = models.User(
         username=user_data.username,
-        hashed_password=get_password_hash(user_data.password)
+        hashed_password=get_password_hash(user_data.password),
+        premium_until=datetime.utcnow() + timedelta(days=7)
     )
     db.add(novo_usuario)
     db.commit()
@@ -135,12 +135,13 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
     if not user or not verify_password(user_data.password, user.hashed_password):
         raise HTTPException(status_code=401, detail="Credenciais incorretas")
 
-    # NOVA VALIDAÇÃO NO LOGIN
     if hasattr(user, 'is_active') and not user.is_active:
         raise HTTPException(status_code=403, detail="Conta desabilitada pelo administrador.")
         
-    if not user.is_admin and datetime.utcnow() > user.premium_until:
-        raise HTTPException(status_code=403, detail="Seu período premium expirou.")
+    # BLINDAGEM NO LOGIN: Verifica se a conta normal expirou ou está nula
+    if not user.is_admin:
+        if user.premium_until is None or datetime.utcnow() > user.premium_until:
+            raise HTTPException(status_code=403, detail="Seu período premium expirou.")
 
     token = create_access_token(data={"sub": user.username, "is_admin": user.is_admin})
     return {
@@ -181,11 +182,11 @@ def listar_usuarios(admin: models.User = Depends(get_current_admin), db: Session
     
     resultado = []
     for u in users:
-        # Lógica inteligente de status visual
         status_atual = "Ativo"
         if hasattr(u, 'is_active') and not u.is_active:
             status_atual = "Desabilitado"
-        elif u.premium_until < datetime.utcnow() and not u.is_admin:
+        # BLINDAGEM NO PAINEL ADMIN
+        elif not u.is_admin and (u.premium_until is None or u.premium_until < datetime.utcnow()):
             status_atual = "Expirado"
             
         resultado.append({
@@ -204,24 +205,76 @@ def adicionar_dias_premium(user_id: int, update_data: PremiumUpdate, admin: mode
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
-    data_base = user.premium_until if user.premium_until > datetime.utcnow() else datetime.utcnow()
+    # BLINDAGEM: Se não tiver data ou já tiver expirado, usa a data de hoje como base
+    data_base = user.premium_until if (user.premium_until and user.premium_until > datetime.utcnow()) else datetime.utcnow()
     user.premium_until = data_base + timedelta(days=update_data.dias_adicionais)
     
     db.commit()
     return {"message": f"Adicionado {update_data.dias_adicionais} dias para {user.username}. Válido até {user.premium_until.strftime('%d/%m/%Y')}"}
 
-# NOVA ROTA: ALTERAR STATUS
 @app.put("/api/admin/users/{user_id}/status", tags=["Admin"])
 def alterar_status_usuario(user_id: int, update_data: StatusUpdate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     
-    # Altera no banco de dados
     user.is_active = (update_data.status == "Ativo")
     db.commit()
-    
     return {"message": f"Status de {user.username} alterado para {update_data.status}!"}
+
+@app.delete("/api/admin/users/{user_id}", tags=["Admin"])
+def deletar_usuario(user_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if user.is_admin:
+        raise HTTPException(status_code=403, detail="Não é possível apagar a conta do administrador mestre.")
+    db.delete(user)
+    db.commit()
+    return {"message": "Utilizador apagado permanentemente."}
+
+# GESTÃO DE PLAYLISTS POR PARTE DO ADMIN
+@app.get("/api/admin/users/{user_id}/playlists", tags=["Admin"])
+def admin_listar_playlists_usuario(user_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    playlists = db.query(models.Playlist).filter(models.Playlist.user_id == user_id).all()
+    return playlists
+
+@app.post("/api/admin/users/{user_id}/playlists", tags=["Admin"])
+def admin_criar_playlist(user_id: int, playlist_data: PlaylistCreate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    nova_playlist = models.Playlist(
+        name=playlist_data.name,
+        server_url=playlist_data.server_url.rstrip('/'),
+        iptv_username=playlist_data.iptv_username,
+        iptv_password=playlist_data.iptv_password,
+        user_id=user_id
+    )
+    db.add(nova_playlist)
+    db.commit()
+    return {"message": "Playlist adicionada com sucesso ao utilizador!"}
+
+@app.put("/api/admin/playlists/{playlist_id}", tags=["Admin"])
+def admin_editar_playlist(playlist_id: int, update_data: PlaylistCreate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist não encontrada")
+    playlist.name = update_data.name
+    playlist.server_url = update_data.server_url.rstrip('/')
+    playlist.iptv_username = update_data.iptv_username
+    playlist.iptv_password = update_data.iptv_password
+    db.commit()
+    return {"message": "Playlist atualizada com sucesso!"}
+
+@app.delete("/api/admin/playlists/{playlist_id}", tags=["Admin"])
+def admin_remover_playlist(playlist_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
+    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id).first()
+    if not playlist:
+        raise HTTPException(status_code=404, detail="Playlist não encontrada")
+    db.delete(playlist)
+    db.commit()
+    return {"message": "Playlist removida pelo administrador."}
 
 
 # ==========================================
@@ -248,10 +301,8 @@ def verificar_login_iptv(server_url: str, user: str, passw: str):
 def get_filmes(server_url: str, user: str, passw: str):
     cache_key = get_cache_key(server_url, user, "filmes")
     agora = time.time()
-    
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < CACHE_TTL):
         return cache[cache_key]["data"]
-
     api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action=get_vod_streams"
     try:
         response = requests.get(api_url, timeout=20)
@@ -266,10 +317,8 @@ def get_filmes(server_url: str, user: str, passw: str):
 def get_series(server_url: str, user: str, passw: str):
     cache_key = get_cache_key(server_url, user, "series")
     agora = time.time()
-    
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < CACHE_TTL):
         return cache[cache_key]["data"]
-
     api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action=get_series"
     try:
         response = requests.get(api_url, timeout=20)
@@ -294,10 +343,8 @@ def get_series_info(series_id: int, server_url: str, user: str, passw: str):
 def get_ao_vivo(server_url: str, user: str, passw: str):
     cache_key = get_cache_key(server_url, user, "ao_vivo")
     agora = time.time()
-    
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < CACHE_TTL):
         return cache[cache_key]["data"]
-
     api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action=get_live_streams"
     try:
         response = requests.get(api_url, timeout=20)
@@ -310,22 +357,14 @@ def get_ao_vivo(server_url: str, user: str, passw: str):
 
 @app.get("/api/categorias/{tipo}", tags=["IPTV Proxy"])
 def get_categorias(tipo: str, server_url: str, user: str, passw: str):
-    action_map = {
-        "filmes": "get_vod_categories",
-        "series": "get_series_categories",
-        "ao-vivo": "get_live_categories"
-    }
-    
+    action_map = {"filmes": "get_vod_categories", "series": "get_series_categories", "ao-vivo": "get_live_categories"}
     if tipo not in action_map:
         raise HTTPException(status_code=400, detail="Tipo de categoria inválido")
-
     action = action_map[tipo]
     cache_key = get_cache_key(server_url, user, f"cat_{tipo}")
     agora = time.time()
-    
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < CACHE_TTL):
         return cache[cache_key]["data"]
-
     api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action={action}"
     try:
         response = requests.get(api_url, timeout=15)
@@ -350,22 +389,18 @@ def get_filme_info(vod_id: int, server_url: str, user: str, passw: str):
 def get_epg(stream_id: int, server_url: str, user: str, passw: str):
     cache_key = get_cache_key(server_url, user, f"epg_{stream_id}")
     agora = time.time()
-    
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < 900):
         return cache[cache_key]["data"]
-
     api_url = f"{server_url}/player_api.php?username={user}&password={passw}&action=get_short_epg&stream_id={stream_id}&limit=10"
-    
     try:
         response = requests.get(api_url, timeout=10)
         response.raise_for_status()
         dados = response.json()
-        
         cache[cache_key] = {"data": dados, "timestamp": agora}
         return dados
     except Exception:
         return {"epg_listings": []}
-    
+
 @app.delete("/api/playlists/{playlist_id}", tags=["Playlists"])
 def deletar_playlist(playlist_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):
     playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id, models.Playlist.user_id == current_user.id).first()
@@ -374,71 +409,6 @@ def deletar_playlist(playlist_id: int, current_user: models.User = Depends(get_c
     db.delete(playlist)
     db.commit()
     return {"message": "Playlist removida"}
-
-
-@app.delete("/api/admin/users/{user_id}", tags=["Admin"])
-def deletar_usuario(user_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    
-    if user.is_admin:
-        raise HTTPException(status_code=403, detail="Não é possível apagar a conta do administrador mestre.")
-        
-    db.delete(user)
-    db.commit()
-    
-    return {"message": "Utilizador apagado permanentemente."}
-# ==========================================
-# ROTAS ADMIN: GESTÃO DE PLAYLISTS DE USUÁRIOS
-# ==========================================
-
-@app.get("/api/admin/users/{user_id}/playlists", tags=["Admin"])
-def admin_listar_playlists_usuario(user_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    playlists = db.query(models.Playlist).filter(models.Playlist.user_id == user_id).all()
-    return playlists
-
-@app.put("/api/admin/playlists/{playlist_id}", tags=["Admin"])
-def admin_editar_playlist(playlist_id: int, update_data: PlaylistCreate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id).first()
-    if not playlist:
-        raise HTTPException(status_code=404, detail="Playlist não encontrada")
-    
-    playlist.name = update_data.name
-    playlist.server_url = update_data.server_url.rstrip('/')
-    playlist.iptv_username = update_data.iptv_username
-    playlist.iptv_password = update_data.iptv_password
-    
-    db.commit()
-    return {"message": "Playlist atualizada com sucesso!"}
-
-@app.delete("/api/admin/playlists/{playlist_id}", tags=["Admin"])
-def admin_remover_playlist(playlist_id: int, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    playlist = db.query(models.Playlist).filter(models.Playlist.id == playlist_id).first()
-    if not playlist:
-        raise HTTPException(status_code=404, detail="Playlist não encontrada")
-    
-    db.delete(playlist)
-    db.commit()
-    return {"message": "Playlist removida pelo administrador."}
-@app.post("/api/admin/users/{user_id}/playlists", tags=["Admin"])
-def admin_criar_playlist(user_id: int, playlist_data: PlaylistCreate, admin: models.User = Depends(get_current_admin), db: Session = Depends(get_db)):
-    # Verifica se o utilizador existe
-    user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Usuário não encontrado")
-    
-    # Cria a nova playlist para esse utilizador
-    nova_playlist = models.Playlist(
-        name=playlist_data.name,
-        server_url=playlist_data.server_url.rstrip('/'),
-        iptv_username=playlist_data.iptv_username,
-        iptv_password=playlist_data.iptv_password,
-        user_id=user_id
-    )
-    db.add(nova_playlist)
-    db.commit()
-    return {"message": "Playlist adicionada com sucesso ao utilizador!"}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8006, reload=True)

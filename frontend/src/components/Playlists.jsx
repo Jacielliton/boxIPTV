@@ -1,11 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Plus, LogOut, Monitor, User, Globe, Calendar, RefreshCw } from 'lucide-react';
+import { Trash2, Plus, LogOut, Monitor, User, Globe, Calendar, RefreshCw, Settings } from 'lucide-react';
+import AdminPanel from './AdminPanel'; // Importa o painel de administração
 
 export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsuario }) {
   const [playlists, setPlaylists] = useState([]);
   const [carregando, setCarregando] = useState(true);
   
   const [mostrarForm, setMostrarForm] = useState(false);
+  const [mostrarAdmin, setMostrarAdmin] = useState(false); // NOVO: Estado para abrir o painel admin
+
   const [nome, setNome] = useState('');
   const [serverUrl, setServerUrl] = useState('');
   const [iptvUser, setIptvUser] = useState('');
@@ -19,9 +22,8 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
-      // ADICIONE ESTAS 3 LINHAS ABAIXO:
       if (response.status === 401 || response.status === 403) {
-        onLogout(); // Se o Admin o bloqueou ou o premium expirou, expulsa-o da app!
+        onLogout(); 
         return;
       }
 
@@ -73,7 +75,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
   };
 
   const handleDeletarPlaylist = async (e, id) => {
-    e.stopPropagation(); // Impede de selecionar a playlist ao clicar em deletar
+    e.stopPropagation(); 
     if (!window.confirm("Deseja realmente remover esta lista?")) return;
 
     try {
@@ -91,6 +93,11 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
     if (!data) return "N/A";
     return new Date(data).toLocaleDateString('pt-BR');
   };
+
+  // Se o botão Admin for clicado, renderiza apenas o Painel Admin
+  if (mostrarAdmin) {
+    return <AdminPanel token={token} onVoltar={() => setMostrarAdmin(false)} />;
+  }
 
   return (
     <div style={{ padding: '20px', backgroundColor: '#141414', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' }}>
@@ -114,9 +121,18 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
             </div>
           </div>
         </div>
-        <button className="tv-focusable" onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
-          <LogOut size={18} /> Sair
-        </button>
+
+        {/* BOTÕES DE AÇÃO: ADMIN E SAIR */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {(sessaoUsuario?.is_admin || sessaoUsuario?.isAdmin) && (
+            <button className="tv-focusable" onClick={() => setMostrarAdmin(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', backgroundColor: '#0056b3', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+              <Settings size={18} /> Admin
+            </button>
+          )}
+          <button className="tv-focusable" onClick={onLogout} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <LogOut size={18} /> Sair
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
