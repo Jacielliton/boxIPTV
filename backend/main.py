@@ -21,7 +21,16 @@ app = FastAPI(title="BoxIPTV Pro")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
+    allow_origins=[
+        "http://localhost",
+        "http://localhost:3000",
+        "http://localhost:3006", # Onde você está a testar agora
+        "http://localhost:5173",
+        "http://iptv.tecnopriv.top",
+        "https://iptv.tecnopriv.top",
+        "capacitor://localhost",   # Permissão para o APK Android
+        "ionic://localhost"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

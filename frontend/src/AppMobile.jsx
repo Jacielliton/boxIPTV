@@ -54,8 +54,8 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     const query = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
     
     Promise.all([
-      fetch(`http://localhost:8006/api/${endpoint}${query}`).then(res => res.json()),
-      fetch(`http://localhost:8006/api/categorias/${tipoAtual}${query}`).then(res => res.json())
+      fetch(`http://iptv.tecnopriv.top:8006/api/${endpoint}${query}`).then(res => res.json()),
+      fetch(`http://iptv.tecnopriv.top:8006/api/categorias/${tipoAtual}${query}`).then(res => res.json())
     ]).then(([dCont, dCat]) => {
       setConteudo(Array.isArray(dCont) ? dCont : []);
       setCategorias(Array.isArray(dCat) ? dCat : []);
@@ -79,7 +79,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
 
     const queryParams = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
     
-    fetch(`http://localhost:8006/api/${tipoAtual}/${item.stream_id || item.series_id}${queryParams}`)
+    fetch(`http://iptv.tecnopriv.top:8006/api/${tipoAtual}/${item.stream_id || item.series_id}${queryParams}`)
       .then(res => res.json())
       .then(data => {
         setDadosDetalhes(data);

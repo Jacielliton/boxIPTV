@@ -8,7 +8,7 @@ PASTA_SRC = os.path.join(os.getcwd(), "frontend", "src")
 # Os URLs dos seus 3 ambientes
 AMBIENTES = {
     "1": {"nome": "Localhost (Desenvolvimento local)", "url": "http://localhost:8006"},
-    "2": {"nome": "APP / Domínio (Produção / APK)", "url": "http://iptv.tecnopriv.top"},
+    "2": {"nome": "APP / Domínio (Produção / APK)", "url": "http://iptv.tecnopriv.top:8006"}, 
     "3": {"nome": "VPS (IP Direto)", "url": "http://72.60.3.89:8006"}
 }
 

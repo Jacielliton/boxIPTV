@@ -231,8 +231,8 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     const queryParams = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
     
     Promise.all([
-      fetch(`http://localhost:8006/api/${endpoint}${queryParams}`).then(res => res.json()),
-      fetch(`http://localhost:8006/api/categorias/${tipoAtual}${queryParams}`).then(res => res.json())
+      fetch(`http://iptv.tecnopriv.top:8006/api/${endpoint}${queryParams}`).then(res => res.json()),
+      fetch(`http://iptv.tecnopriv.top:8006/api/categorias/${tipoAtual}${queryParams}`).then(res => res.json())
     ]).then(([dadosConteudo, dadosCategorias]) => {
       setConteudo(Array.isArray(dadosConteudo) ? dadosConteudo : []);
       setCategorias(Array.isArray(dadosCategorias) ? dadosCategorias : []);
@@ -353,7 +353,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
     if (tipoAtual === 'filmes') {
       setCarregando(true);
-      fetch(`http://localhost:8006/api/filmes/${item.stream_id}${queryParams}`)
+      fetch(`http://iptv.tecnopriv.top:8006/api/filmes/${item.stream_id}${queryParams}`)
         .then(res => res.json())
         .then(data => {
           setFilmeDetalhes(data);
@@ -363,7 +363,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
     } else if (tipoAtual === 'ao-vivo') {
       setCarregando(true);
-      fetch(`http://localhost:8006/api/epg?stream_id=${item.stream_id}${queryParams}`)
+      fetch(`http://iptv.tecnopriv.top:8006/api/epg?stream_id=${item.stream_id}${queryParams}`)
         .then(res => res.json())
         .then(data => {
           setCanalDetalhes({ info: item, epg: Array.isArray(data?.epg_listings) ? data.epg_listings : [] });
@@ -377,7 +377,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
     } else {
       setCarregando(true);
-      fetch(`http://localhost:8006/api/series/${item.series_id}${queryParams}`)
+      fetch(`http://iptv.tecnopriv.top:8006/api/series/${item.series_id}${queryParams}`)
         .then(res => res.json())
         .then(data => {
           setSerieDetalhes(data);
