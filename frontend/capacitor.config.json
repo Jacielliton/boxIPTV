@@ -1,5 +1,7 @@
 {
   "appId": "com.tecnopriv.boxiptv",
   "appName": "BoxIPTV Pro",
-  "webDir": "dist"
+  "webDir": "dist",
+  "bundledWebRuntime": false,
+  "server": { "cleartext": true }
 }
