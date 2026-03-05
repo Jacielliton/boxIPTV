@@ -6,7 +6,8 @@ PASTA_SRC = os.path.join(os.getcwd(), "frontend", "src")
 AMBIENTES = {
     "1": {"nome": "Localhost (Desenvolvimento local)", "url": "http://localhost:8006"},
     "2": {"nome": "APP / Domínio (HTTPS Seguro)", "url": "https://iptv.tecnopriv.top"}, # <-- HTTPS e sem porta!
-    "3": {"nome": "VPS (IP Direto)", "url": "http://72.60.3.89:8006"}
+    "3": {"nome": "VPS (IP Direto)", "url": "http://72.60.3.89:8006"},
+    "4": {"nome": "APP / Domínio (HTTP)", "url": "http://iptv.tecnopriv.top:8006"}
 }
 
 URLS_ANTIGOS = [
