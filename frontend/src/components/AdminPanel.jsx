@@ -30,7 +30,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const carregarUsuarios = async () => {
     setCarregando(true);
     try {
-      const res = await fetch('https://iptv.tecnopriv.top/api/admin/users', {
+      const res = await fetch('http://72.60.3.89:8006/api/admin/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -52,7 +52,7 @@ export default function AdminPanel({ token, onVoltar }) {
     const dias = parseInt(diasInput[userId] || 0);
     if (dias <= 0 || isNaN(dias)) return;
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/users/${userId}/premium`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${userId}/premium`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ dias_adicionais: dias })
@@ -70,7 +70,7 @@ export default function AdminPanel({ token, onVoltar }) {
     const novoStatus = statusAtual === 'Ativo' ? 'Desabilitado' : 'Ativo';
     if (!window.confirm(`Tem certeza que deseja alterar o status para ${novoStatus}?`)) return;
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/users/${userId}/status`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${userId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: novoStatus })
@@ -82,7 +82,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const handleApagarUsuario = async (userId, username) => {
     if (!window.confirm(`ATENÇÃO: Deseja apagar permanentemente o utilizador ${username || 'Desconhecido'} e todas as suas playlists?`)) return;
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/users/${userId}`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -102,7 +102,7 @@ export default function AdminPanel({ token, onVoltar }) {
     setEditandoPlaylist(null); 
     setMostrarFormNova(false); // Reseta o form novo
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/users/${user.id}/playlists`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${user.id}/playlists`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -115,7 +115,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const deletarPlaylistAdmin = async (playlistId) => {
     if (!window.confirm("Remover esta playlist permanentemente?")) return;
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/playlists/${playlistId}`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/playlists/${playlistId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -141,7 +141,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const salvarEdicaoPlaylist = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/playlists/${editandoPlaylist.id}`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/playlists/${editandoPlaylist.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(editandoPlaylist)
@@ -159,7 +159,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const salvarNovaPlaylist = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`https://iptv.tecnopriv.top/api/admin/users/${usuarioSelecionado.id}/playlists`, {
+      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${usuarioSelecionado.id}/playlists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(novaPlaylist)

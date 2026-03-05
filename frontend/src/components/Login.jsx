@@ -23,7 +23,7 @@ export default function Login({ onLogin }) {
 
     try {
       const endpoint = modoLogin ? '/api/login' : '/api/register';
-      const response = await fetch(`https://iptv.tecnopriv.top${endpoint}`, {
+      const response = await fetch(`http://72.60.3.89:8006${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
