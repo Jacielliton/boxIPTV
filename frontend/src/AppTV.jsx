@@ -71,9 +71,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     }
   };
 
-  // ==========================================
-  // NAVEGAÇÃO ESPACIAL DE SMART TV
-  // ==========================================
   useEffect(() => {
     const handleKeyDown = (e) => {
       const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
@@ -168,23 +165,14 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setHistorico(prevHistorico => {
       const idUnico = itemOriginal.stream_id || itemOriginal.series_id;
       const seguro = Array.isArray(prevHistorico) ? prevHistorico : [];
-      const novaLista = [
-        { ...itemOriginal, tipo_salvo: tipo },
-        ...seguro.filter(i => (i.stream_id || i.series_id) !== idUnico)
-      ].slice(0, 30);
+      const novaLista = [ { ...itemOriginal, tipo_salvo: tipo }, ...seguro.filter(i => (i.stream_id || i.series_id) !== idUnico) ].slice(0, 30);
       localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
       return novaLista;
     });
   };
 
-  // ==========================================
-  // FUNÇÕES DE REMOÇÃO (HISTÓRICO E MINHA LISTA)
-  // ==========================================
   const removerDoHistorico = (itemParaRemover, e) => {
-    if (e) {
-      e.stopPropagation(); 
-      e.preventDefault();
-    }
+    if (e) { e.stopPropagation(); e.preventDefault(); }
     setHistorico(prevHistorico => {
       const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
       const novaLista = prevHistorico.filter(i => (i.stream_id || i.series_id) !== idUnico);
@@ -204,10 +192,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   };
 
   const removerDaMinhaLista = (itemParaRemover, e) => {
-    if (e) {
-      e.stopPropagation(); 
-      e.preventDefault();
-    }
+    if (e) { e.stopPropagation(); e.preventDefault(); }
     setMinhaLista(prevLista => {
       const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
       const novaLista = prevLista.filter(i => (i.stream_id || i.series_id) !== idUnico);
@@ -269,6 +254,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     return `${m}m ${s}s`;
   };
 
+  // ==========================================
+  // MÁGICA DO CLIENT-SIDE: URL Builder Direto
+  // ==========================================
+  const getIptvUrl = (action, extraParams = '') => {
+    let baseUrl = playlistAtiva.server_url.trim();
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) baseUrl = "http://" + baseUrl;
+    baseUrl = baseUrl.replace(/\/$/, "");
+    if (baseUrl.endsWith("player_api.php")) baseUrl = baseUrl.replace("/player_api.php", "");
+    return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
+  };
+
   useEffect(() => {
     if (!playlistAtiva) return;
     setCarregando(true);
@@ -276,22 +272,25 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setLimite(50);
     setCategoriaSelecionada(''); 
     
-    const endpoint = tipoAtual === 'filmes' ? 'filmes' : (tipoAtual === 'series' ? 'series' : 'ao-vivo');
-    const queryParams = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
+    const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
+    const actionCat = tipoAtual === 'filmes' ? 'get_vod_categories' : (tipoAtual === 'series' ? 'get_series_categories' : 'get_live_categories');
     
     Promise.all([
-      fetch(`/api/${endpoint}${queryParams}`).then(res => res.json()),
-      fetch(`/api/categorias/${tipoAtual}${queryParams}`).then(res => res.json())
-    ]).then(([dadosConteudo, dadosCategorias]) => {
-      setConteudo(Array.isArray(dadosConteudo) ? dadosConteudo : []);
-      setCategorias(Array.isArray(dadosCategorias) ? dadosCategorias : []);
+      fetch(getIptvUrl(actionStream)).then(res => res.json()),
+      fetch(getIptvUrl(actionCat)).then(res => res.json())
+    ]).then(([dCont, dCat]) => {
+      setConteudo(Array.isArray(dCont) ? dCont : []);
+      
+      // Ordenação Alfabética A-Z no Frontend
+      let cats = Array.isArray(dCat) ? dCat : [];
+      cats.sort((a, b) => (a.category_name || '').trim().localeCompare((b.category_name || '').trim(), 'pt-BR', {sensitivity: 'base'}));
+      setCategorias(cats);
+      
       setCarregando(false);
       setIndiceDestaque(0); 
     }).catch(err => {
-      console.error("Erro na API:", err);
-      setConteudo([]);
-      setCategorias([]);
-      setCarregando(false);
+      setConteudo([]); setCategorias([]); setCarregando(false);
+      alert("Falha ao conectar ao servidor IPTV. Verifique a internet ou dados da lista.");
     });
   }, [tipoAtual, playlistAtiva]);
 
@@ -356,9 +355,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // ==========================================
-  // LÓGICA DE ARRASTO COM O MOUSE (DRAG)
-  // ==========================================
   const handleMouseDown = (e) => {
     dragRef.current.isDown = true;
     dragRef.current.dragged = false;
@@ -386,23 +382,20 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     const y = e.pageY - e.currentTarget.offsetTop;
     const walkX = (x - dragRef.current.startX) * 1.5; 
     const walkY = (y - dragRef.current.startY) * 1.5; 
-    
     if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) dragRef.current.dragged = true; 
-    
     e.currentTarget.scrollLeft = dragRef.current.scrollLeft - walkX;
     e.currentTarget.scrollTop = dragRef.current.scrollTop - walkY;
   };
 
+  // Abrir Detalhes Direto do IPTV
   const handleItemClick = (item) => {
     if (dragRef.current.dragged || !item) return;
     registrarHistorico(item, tipoAtual);
     setItemAtualDetalhes(item); 
-    
-    const queryParams = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
+    setCarregando(true);
 
     if (tipoAtual === 'filmes') {
-      setCarregando(true);
-      fetch(`/api/filmes/${item.stream_id}${queryParams}`)
+      fetch(getIptvUrl('get_vod_info', `&vod_id=${item.stream_id}`))
         .then(res => res.json())
         .then(data => {
           setFilmeDetalhes(data);
@@ -411,8 +404,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         }).catch(err => { setCarregando(false); });
 
     } else if (tipoAtual === 'ao-vivo') {
-      setCarregando(true);
-      fetch(`/api/epg?stream_id=${item.stream_id}${queryParams}`)
+      fetch(getIptvUrl('get_short_epg', `&stream_id=${item.stream_id}&limit=10`))
         .then(res => res.json())
         .then(data => {
           setCanalDetalhes({ info: item, epg: Array.isArray(data?.epg_listings) ? data.epg_listings : [] });
@@ -425,8 +417,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         });
 
     } else {
-      setCarregando(true);
-      fetch(`/api/series/${item.series_id}${queryParams}`)
+      fetch(getIptvUrl('get_series_info', `&series_id=${item.series_id}`))
         .then(res => res.json())
         .then(data => {
           setSerieDetalhes(data);
@@ -443,14 +434,18 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     if (!filmeDetalhes || !filmeDetalhes.movie_data) return;
     const idFilme = filmeDetalhes.movie_data.stream_id;
     const extensao = filmeDetalhes.movie_data.container_extension || 'mp4';
-    const streamUrl = `${playlistAtiva.server_url}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${idFilme}.${extensao}`;
+    let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
+    if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
+    const streamUrl = `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${idFilme}.${extensao}`;
     setItemSelecionado({ id: idFilme, nome: filmeDetalhes.info?.name || 'Filme', url: streamUrl, startTime: inicio });
   };
 
   const handlePlayEpisode = (episodio, inicio = 0) => {
     if (!episodio) return;
     const extensao = episodio.container_extension || 'mp4';
-    const streamUrl = `${playlistAtiva.server_url}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${episodio.id}.${extensao}`;
+    let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
+    if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
+    const streamUrl = `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${episodio.id}.${extensao}`;
     setItemSelecionado({
       id: episodio.id,
       nome: `${serieDetalhes?.info?.name || 'Série'} - S${temporadaSelecionada}E${episodio.episode_num} - ${episodio.title || ''}`,
@@ -461,7 +456,9 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
   const handlePlayCanal = () => {
     if (!canalDetalhes || !canalDetalhes.info) return;
-    const streamUrl = `${playlistAtiva.server_url}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`;
+    let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
+    if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
+    const streamUrl = `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`;
     setItemSelecionado({ id: canalDetalhes.info.stream_id, nome: canalDetalhes.info.name, url: streamUrl, startTime: 0 });
   };
 
@@ -479,22 +476,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   return (
     <div style={{ padding: '20px', fontFamily: 'Arial', backgroundColor: '#141414', minHeight: '100vh', color: '#fff' }}>
       
-      {/* ESTILOS INJETADOS PARA ANIQUILAR BARRAS E CONTROLAR FOCO DA TV */}
       <style>{`
         *::-webkit-scrollbar, body::-webkit-scrollbar, html::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; -webkit-appearance: none !important; }
         * { -ms-overflow-style: none !important; scrollbar-width: none !important; }
-
         @keyframes shimmer { 0% { background-position: -200px 0; } 100% { background-position: calc(200px + 100%) 0; } }
         .skeleton-loader { background-image: linear-gradient(90deg, #222 0px, #333 40px, #222 80px); background-size: 200px 100%; animation: shimmer 1.5s infinite linear; }
-        
         .banner-focusable.tv-focusable:focus, .banner-focusable.tv-focusable:hover { outline: none !important; transform: none !important; box-shadow: none !important; }
         .banner-focusable:focus button, .banner-focusable:hover button { outline: 3px solid white !important; outline-offset: 2px; transform: scale(1.05) !important; box-shadow: 0 10px 20px rgba(0,0,0,0.8) !important; background-color: #e50914 !important; color: white !important; }
       `}</style>
 
-      {/* CABEÇALHO UNIFICADO (Tipos à Esquerda, Usuário à Direita) */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 30px', backgroundColor: 'rgba(20, 20, 20, 0.95)', borderBottom: '1px solid #333', position: 'sticky', top: 0, zIndex: 100, width: '100%', boxSizing: 'border-box', marginBottom: '20px', borderRadius: '8px' }}>
         
-        {/* Esquerda: Filmes, Séries, TV ao Vivo */}
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
           <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('filmes'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'filmes' ? '#e50914' : 'transparent', color: tipoAtual === 'filmes' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Film size={20} /> Filmes
@@ -507,24 +499,19 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           </button>
         </div>
 
-        {/* Direita: Perfil, Admin, Trocar Playlist, Sair */}
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>   
           <span style={{ color: '#aaa', fontSize: '14px', marginRight: '5px' }}>
             Usuário: <strong style={{ color: 'white' }}>{sessaoUsuario.username}</strong>
           </span>
-
           {(sessaoUsuario?.role === 'admin' || sessaoUsuario?.isAdmin) && (
             <button tabIndex={0} className="tv-focusable" onClick={() => setMostrarAdmin(true)} style={{ padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', backgroundColor: '#0056b3', color: 'white', fontWeight: 'bold', fontSize: '14px' }}>
               <Settings size={16} /> Admin
             </button>
           )}
-
           <div style={{ width: '1px', height: '30px', backgroundColor: '#333', margin: '0 5px' }}></div> 
-
           <button tabIndex={0} className="tv-focusable" onClick={() => setPlaylistAtiva(null)} style={{ padding: '10px 15px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #333', backgroundColor: '#222', color: 'white', fontWeight: 'bold', fontSize: '14px' }}>
             <RefreshCw size={16} /> Trocar Playlist
           </button>
-          
           <button tabIndex={0} className="tv-focusable" onClick={efetuarLogout} style={{ padding: '10px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', border: 'none', backgroundColor: 'transparent', color: '#aaa', transition: '0.2s' }} title="Sair">
             <LogOut size={20} />
           </button>
@@ -533,12 +520,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
         
-        {/* ========================================================================= */}
-        {/* BARRA LATERAL (MENU E CATEGORIAS) FIXA À ESQUERDA                         */}
-        {/* ========================================================================= */}
         <div style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>
-          
-          {/* BARRA DE PESQUISA */}
           <div style={{ marginBottom: '15px', position: 'relative' }}>
             <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
             <input 
@@ -597,9 +579,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           </button>
         </div>
 
-        {/* ========================================================================= */}
-        {/* ÁREA DE CONTEÚDO PRINCIPAL (Detalhes, Banners e Filmes)                   */}
-        {/* ========================================================================= */}
         <div className="conteudo-container" style={{ flex: 1, minWidth: 0 }}>
           {itemSelecionado && <Player channel={itemSelecionado} onClose={handleClosePlayer} startTime={itemSelecionado.startTime || 0} />}
 
@@ -772,7 +751,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                                 <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
                                     style={{ position: 'relative', flex: '0 0 auto', width: tipoAtual === 'ao-vivo' ? '250px' : '180px', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333', transition: 'transform 0.3s' }}>
                                     
-                                    {/* INÍCIO DO SELO (CARROSSEL) */}
                                     {item?.rating && item.rating !== "0" && item.rating !== 0 && (
                                     <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
                                         <Star size={12} fill="currentColor" /> {item.rating}
@@ -792,7 +770,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                             <p style={{ textAlign: 'center', color: '#aaa', marginTop: '50px' }}>Nenhum conteúdo encontrado nesta vista.</p>
                             ) : (
                             <>
-                                {/* BOTÃO DE LIMPAR TODO O HISTÓRICO / LISTA */}
                                 {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && conteudoParaExibir.length > 0 && (
                                     <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
                                         <button
@@ -811,7 +788,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                                     <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
                                         style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
                                         
-                                        {/* NOVO: BOTÃO REMOVER INDIVIDUAL DOS RECENTES E MINHA LISTA */}
                                         {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
                                             <button
                                                 tabIndex={0}
@@ -830,7 +806,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                                             </button>
                                         )}
 
-                                        {/* INÍCIO DO SELO (GRELHA PRINCIPAL) */}
                                         {item?.rating && item.rating !== "0" && item.rating !== 0 && (
                                         <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
                                             <Star size={12} fill="currentColor" /> {item.rating}
@@ -862,4 +837,3 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     </div>
   );
 }
-
