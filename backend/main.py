@@ -420,6 +420,8 @@ async def get_categorias(tipo: str, server_url: str, user: str, passw: str):
     action = action_map[tipo]
     cache_key = get_cache_key(base_url, user, f"cat_{tipo}")
     agora = time.time()
+    
+    # Verifica o cache
     if cache_key in cache and (agora - cache[cache_key]["timestamp"] < CACHE_TTL):
         return cache[cache_key]["data"]
         
@@ -430,8 +432,18 @@ async def get_categorias(tipo: str, server_url: str, user: str, passw: str):
             response.raise_for_status()
             try:
                 dados = response.json()
+                
+                # ==========================================
+                # MÁGICA: ORDENAR ALFABETICAMENTE A-Z
+                # ==========================================
+                if isinstance(dados, list):
+                    # Ordena ignorando maiúsculas/minúsculas e espaços em branco
+                    dados = sorted(dados, key=lambda x: str(x.get("category_name", "")).strip().lower())
+                
+                # Salva no cache a lista já organizada
                 cache[cache_key] = {"data": dados, "timestamp": agora}
                 return dados
+                
             except ValueError:
                 return []
         except Exception:
