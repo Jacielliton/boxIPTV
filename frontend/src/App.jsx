@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Login from './components/Login';
 import Playlists from './components/Playlists'; 
-import AppTV from './AppTV'; // O antigo App.jsx gigante vai para aqui
-import AppMobile from './AppMobile'; // O novo layout de celular
+import AppTV from './AppTV'; 
+import AppMobile from './AppMobile'; 
 
 function App() {
   const [sessaoUsuario, setSessaoUsuario] = useState(() => {
@@ -14,20 +14,13 @@ function App() {
   
   const [playlistAtiva, setPlaylistAtiva] = useState(null);
   
-  // Lógica inteligente: deteta telemóvel em pé (largura < 768) ou deitado (altura < 500)
-  const checkIsMobile = () => {
-    return window.innerWidth < 768 || window.innerHeight < 500;
-  };
-
-  const [isMobile, setIsMobile] = useState(checkIsMobile);
-
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(checkIsMobile());
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // REGRA DE OURO: Verifica apenas UMA VEZ ao abrir o App.
+  // Combina o tamanho da tela com a deteção do sistema Android/iOS.
+  const [isMobile] = useState(() => {
+    const isMobileSize = window.innerWidth < 768 || window.innerHeight < 500;
+    const isMobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    return isMobileSize || isMobileAgent;
+  });
 
   const efetuarLogin = (dadosSessao) => {
     localStorage.setItem('boxiptv_sessao', JSON.stringify(dadosSessao));
@@ -40,13 +33,11 @@ function App() {
     setPlaylistAtiva(null);
   };
 
-  // 1. Ecrã de Login
   if (!sessaoUsuario) return <Login onLogin={efetuarLogin} />;
 
-  // 2. Ecrã de Escolha de Playlist
   if (!playlistAtiva) return <Playlists token={sessaoUsuario.token} onSelectPlaylist={setPlaylistAtiva} onLogout={efetuarLogout} sessaoUsuario={sessaoUsuario} />;
 
-  // 3. Ecrã da Aplicação (Roteamento Inteligente)
+  // Como retiramos o 'useEffect' do 'resize', o layout agora é imutável até recarregar a app!
   return isMobile ? (
     <AppMobile 
       sessaoUsuario={sessaoUsuario} 
