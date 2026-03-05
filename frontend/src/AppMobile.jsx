@@ -27,7 +27,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
   const [temporadaSelecionada, setTemporadaSelecionada] = useState(null);
 
-  // Rotação de Tela (Landscape para o vídeo)
+  // Rotação de Tela (Landscape para o vídeo e Portrait ao fechar)
   useEffect(() => {
     if (itemSelecionado) {
       try {
@@ -37,8 +37,14 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
       } catch (error) {}
     } else {
       try {
-        if (window.screen.orientation && window.screen.orientation.unlock) {
-          window.screen.orientation.unlock();
+        if (window.screen.orientation && window.screen.orientation.lock) {
+          // Força ativamente o regresso à posição em pé
+          window.screen.orientation.lock('portrait').then(() => {
+            // Após ficar em pé, destrava para o utilizador usar normalmente
+            window.screen.orientation.unlock();
+          }).catch(() => {
+            if (window.screen.orientation.unlock) window.screen.orientation.unlock();
+          });
         }
       } catch (error) {}
     }

@@ -14,11 +14,17 @@ function App() {
   
   const [playlistAtiva, setPlaylistAtiva] = useState(null);
   
-  // Deteta o tamanho da tela para decidir a interface
-  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  // Lógica inteligente: deteta telemóvel em pé (largura < 768) ou deitado (altura < 500)
+  const checkIsMobile = () => {
+    return window.innerWidth < 768 || window.innerHeight < 500;
+  };
+
+  const [isMobile, setIsMobile] = useState(checkIsMobile);
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    const handleResize = () => {
+      setIsMobile(checkIsMobile());
+    };
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);

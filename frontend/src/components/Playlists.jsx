@@ -108,7 +108,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
         maxWidth: '1000px', margin: '0 auto 40px auto', flexWrap: 'wrap', gap: '20px',
         padding: '20px', background: '#1f1f1f', borderRadius: '12px'
       }}>
-        <h1 style={{ color: '#e50914', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>TECNO IPTV Pro</h1>
+        <h1 style={{ color: '#e50914', margin: 0, textTransform: 'uppercase', letterSpacing: '1px' }}>BoxIPTV Pro</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
           <div style={{ background: '#e50914', padding: '10px', borderRadius: '50%' }}>
             <User size={24} />
