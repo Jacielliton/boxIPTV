@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Film, Tv, Radio, Search, User, LogOut, Settings, RefreshCw, Play, X, Star } from 'lucide-react';
+import { Film, Tv, Radio, Search, User, LogOut, Settings, RefreshCw, Play, X, Star, Bookmark, Check, Trash2, Clock } from 'lucide-react';
 import Player from './components/Player';
 import AdminPanel from './components/AdminPanel';
 
@@ -27,6 +27,30 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
   const [temporadaSelecionada, setTemporadaSelecionada] = useState(null);
 
+  // ==========================================
+  // ESTADOS DE HISTÓRICO E PROGRESSO (COMO NA TV)
+  // ==========================================
+  const [historico, setHistorico] = useState(() => {
+    try {
+      const salvo = localStorage.getItem(`boxiptv_hist_${sessaoUsuario?.username}`);
+      return salvo ? JSON.parse(salvo) : [];
+    } catch (e) { return []; }
+  });
+
+  const [minhaLista, setMinhaLista] = useState(() => {
+    try {
+      const salvo = localStorage.getItem(`boxiptv_lista_${sessaoUsuario?.username}`);
+      return salvo ? JSON.parse(salvo) : [];
+    } catch (e) { return []; }
+  });
+
+  const [progressos, setProgressos] = useState(() => {
+    try {
+      const salvo = localStorage.getItem(`boxiptv_progresso_${sessaoUsuario?.username}`);
+      return salvo ? JSON.parse(salvo) : {};
+    } catch (e) { return {}; }
+  });
+
   // Rotação de Tela (Landscape para o vídeo e Portrait ao fechar)
   useEffect(() => {
     if (itemSelecionado) {
@@ -38,9 +62,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     } else {
       try {
         if (window.screen.orientation && window.screen.orientation.lock) {
-          // Força ativamente o regresso à posição em pé
           window.screen.orientation.lock('portrait').then(() => {
-            // Após ficar em pé, destrava para o utilizador usar normalmente
             window.screen.orientation.unlock();
           }).catch(() => {
             if (window.screen.orientation.unlock) window.screen.orientation.unlock();
@@ -60,8 +82,8 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     const query = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
     
     Promise.all([
-      fetch(`http://72.60.3.89:8006/api/${endpoint}${query}`).then(res => res.json()),
-      fetch(`http://72.60.3.89:8006/api/categorias/${tipoAtual}${query}`).then(res => res.json())
+      fetch(`/api/${endpoint}${query}`).then(res => res.json()),
+      fetch(`/api/categorias/${tipoAtual}${query}`).then(res => res.json())
     ]).then(([dCont, dCat]) => {
       setConteudo(Array.isArray(dCont) ? dCont : []);
       setCategorias(Array.isArray(dCat) ? dCat : []);
@@ -70,22 +92,103 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     }).catch(() => { setConteudo([]); setCategorias([]); setCarregando(false); });
   }, [tipoAtual, playlistAtiva]);
 
-  // Filtros
-  const conteudoFiltrado = conteudo.filter(item => {
-    const matchesBusca = !busca || item.name.toLowerCase().includes(busca.toLowerCase());
-    const matchesCat = !categoriaSelecionada || String(item.category_id) === String(categoriaSelecionada);
-    return matchesBusca && matchesCat;
-  });
+  // ==========================================
+  // FUNÇÕES DE LISTAS E HISTÓRICO
+  // ==========================================
+  const registrarHistorico = (itemOriginal, tipo) => {
+    setHistorico(prev => {
+      const idUnico = itemOriginal.stream_id || itemOriginal.series_id;
+      const novaLista = [
+        { ...itemOriginal, tipo_salvo: tipo },
+        ...prev.filter(i => (i.stream_id || i.series_id) !== idUnico)
+      ].slice(0, 30);
+      localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+      return novaLista;
+    });
+  };
+
+  const removerDoHistorico = (itemParaRemover, e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    setHistorico(prev => {
+      const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
+      const novaLista = prev.filter(i => (i.stream_id || i.series_id) !== idUnico);
+      localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+      return novaLista;
+    });
+  };
+
+  const limparTodoHistorico = () => {
+    if (window.confirm(`Deseja limpar todo o histórico de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) {
+      setHistorico(prev => {
+        const novaLista = prev.filter(i => i.tipo_salvo !== tipoAtual);
+        localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+        return novaLista;
+      });
+    }
+  };
+
+  const toggleMinhaLista = (item) => {
+    if (!item) return;
+    setMinhaLista(prev => {
+      const idUnico = item.stream_id || item.series_id;
+      const jaExiste = prev.find(i => (i.stream_id || i.series_id) === idUnico);
+      let novaLista;
+      if (jaExiste) {
+        novaLista = prev.filter(i => (i.stream_id || i.series_id) !== idUnico);
+      } else {
+        novaLista = [{ ...item, tipo_salvo: tipoAtual }, ...prev];
+      }
+      localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+      return novaLista;
+    });
+  };
+
+  const removerDaMinhaLista = (itemParaRemover, e) => {
+    if (e) { e.stopPropagation(); e.preventDefault(); }
+    setMinhaLista(prev => {
+      const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
+      const novaLista = prev.filter(i => (i.stream_id || i.series_id) !== idUnico);
+      localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+      return novaLista;
+    });
+  };
+
+  const limparTodaMinhaLista = () => {
+    if (window.confirm(`Deseja limpar a sua lista de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) {
+      setMinhaLista(prev => {
+        const novaLista = prev.filter(i => i.tipo_salvo !== tipoAtual);
+        localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+        return novaLista;
+      });
+    }
+  };
+
+  // ==========================================
+  // FILTRAGEM INTELIGENTE
+  // ==========================================
+  let conteudoFiltrado = [];
+  if (categoriaSelecionada === 'recentes') {
+    conteudoFiltrado = historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase())));
+  } else if (categoriaSelecionada === 'minha-lista') {
+    conteudoFiltrado = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase())));
+  } else {
+    conteudoFiltrado = conteudo.filter(item => {
+      const matchesBusca = !busca || item.name.toLowerCase().includes(busca.toLowerCase());
+      const matchesCat = !categoriaSelecionada || String(item.category_id) === String(categoriaSelecionada);
+      return matchesBusca && matchesCat;
+    });
+  }
 
   // Abrir Modal de Detalhes
   const abrirDetalhes = (item) => {
+    registrarHistorico(item, tipoAtual);
     setItemDetalhes(item);
     setCarregandoDetalhes(true);
     setDadosDetalhes(null);
 
     const queryParams = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
     
-    fetch(`http://72.60.3.89:8006/api/${tipoAtual}/${item.stream_id || item.series_id}${queryParams}`)
+    fetch(`/api/${tipoAtual}/${item.stream_id || item.series_id}${queryParams}`)
       .then(res => res.json())
       .then(data => {
         setDadosDetalhes(data);
@@ -97,17 +200,41 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
       .catch(() => setCarregandoDetalhes(false));
   };
 
-  // Play a partir do Modal de Detalhes
-  const handlePlay = (id, extensao = 'mp4', isSeries = false) => {
+  // Lógica do Player
+  const handlePlay = (id, extensao = 'mp4', isSeries = false, inicio = 0) => {
     const tipoUrl = isSeries ? 'series' : 'movie';
     const streamUrl = `${playlistAtiva.server_url}/${tipoUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${id}.${extensao}`;
-    setItemSelecionado({ id, nome: itemDetalhes.name, url: streamUrl, startTime: 0 });
+    setItemSelecionado({ id, nome: itemDetalhes.name, url: streamUrl, startTime: inicio });
   };
 
   const handlePlayLive = (stream_id) => {
     const streamUrl = `${playlistAtiva.server_url}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${stream_id}`;
     setItemSelecionado({ id: stream_id, nome: itemDetalhes.name, url: streamUrl, startTime: 0 });
   };
+
+  const handleClosePlayer = (tempoAtual, duracao) => {
+    if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { 
+      const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0;
+      let novosProgressos = { ...progressos };
+      if (percentagemVista > 0.95) {
+        delete novosProgressos[itemSelecionado.id];
+      } else {
+        novosProgressos[itemSelecionado.id] = tempoAtual;
+      }
+      setProgressos(novosProgressos);
+      localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos));
+    }
+    setItemSelecionado(null);
+  };
+
+  const formatarTempo = (segundos) => {
+    if (!segundos) return '';
+    const m = Math.floor(segundos / 60);
+    const s = Math.floor(segundos % 60);
+    return `${m}m ${s}s`;
+  };
+
+  const itemEstaNaLista = itemDetalhes && minhaLista.some(i => (i.stream_id || i.series_id) === (itemDetalhes.stream_id || itemDetalhes.series_id));
 
   if (mostrarAdmin) return <AdminPanel token={sessaoUsuario.token} onVoltar={() => setMostrarAdmin(false)} />;
 
@@ -129,7 +256,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
       `}</style>
 
-      {itemSelecionado && <Player channel={itemSelecionado} onClose={() => setItemSelecionado(null)} startTime={0} />}
+      {itemSelecionado && <Player channel={itemSelecionado} onClose={handleClosePlayer} startTime={itemSelecionado.startTime || 0} />}
       {menuAberto && <div onClick={() => setMenuAberto(false)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 55, background: 'transparent' }}></div>}
 
       {/* HEADER FIXO: PESQUISA E PERFIL */}
@@ -149,11 +276,17 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
 
         {/* BARRA DE CATEGORIAS DESLIZANTE HORIZONTAL */}
         <div className="hide-scroll" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
-          <button onClick={() => setCategoriaSelecionada('')} style={{ padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === '' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === '' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === '' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+          <button onClick={() => {setCategoriaSelecionada('minha-lista'); setLimite(50);}} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === 'minha-lista' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === 'minha-lista' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === 'minha-lista' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+            <Bookmark size={14} /> Minha Lista
+          </button>
+          <button onClick={() => {setCategoriaSelecionada('recentes'); setLimite(50);}} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === 'recentes' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === 'recentes' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === 'recentes' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+            <Clock size={14} /> Recentes
+          </button>
+          <button onClick={() => {setCategoriaSelecionada(''); setLimite(50);}} style={{ padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === '' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === '' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === '' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
             Todas
           </button>
           {categorias.map(cat => (
-            <button key={cat.category_id} onClick={() => setCategoriaSelecionada(cat.category_id)} style={{ padding: '6px 15px', borderRadius: '20px', border: String(categoriaSelecionada) === String(cat.category_id) ? 'none' : '1px solid #444', backgroundColor: String(categoriaSelecionada) === String(cat.category_id) ? '#e50914' : '#1a1a1a', color: String(categoriaSelecionada) === String(cat.category_id) ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+            <button key={cat.category_id} onClick={() => {setCategoriaSelecionada(cat.category_id); setLimite(50);}} style={{ padding: '6px 15px', borderRadius: '20px', border: String(categoriaSelecionada) === String(cat.category_id) ? 'none' : '1px solid #444', backgroundColor: String(categoriaSelecionada) === String(cat.category_id) ? '#e50914' : '#1a1a1a', color: String(categoriaSelecionada) === String(cat.category_id) ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
               {cat.category_name}
             </button>
           ))}
@@ -176,30 +309,43 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
 
       {/* GRELHA DE CONTEÚDO */}
       <div style={{ padding: '10px 15px' }}>
+        
+        {/* BOTÃO DE LIMPAR LISTA/HISTÓRICO */}
+        {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && conteudoFiltrado.length > 0 && !carregando && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
+                <button
+                    onClick={categoriaSelecionada === 'recentes' ? limparTodoHistorico : limparTodaMinhaLista}
+                    style={{ padding: '8px 15px', backgroundColor: '#1a1a1a', color: '#fff', border: '1px solid #444', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', fontWeight: 'bold' }}
+                >
+                    <Trash2 size={14} color="#ff4444" /> Limpar {categoriaSelecionada === 'recentes' ? 'Histórico' : 'Lista'}
+                </button>
+            </div>
+        )}
+
         {carregando ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '60px' }}><RefreshCw className="animate-spin" size={35} color="#e50914" /></div>
         ) : conteudoFiltrado.length > 0 ? (
           <>
             <div style={{ display: 'grid', gridTemplateColumns: tipoAtual === 'ao-vivo' ? 'repeat(auto-fill, minmax(110px, 1fr))' : 'repeat(auto-fill, minmax(105px, 1fr))', gap: '12px' }}>
                 {conteudoFiltrado.slice(0, limite).map((item, index) => (
-                <div key={item.stream_id || index} onClick={() => abrirDetalhes(item)} style={{ backgroundColor: '#1a1a1a', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                <div key={item.stream_id || item.series_id || index} onClick={() => abrirDetalhes(item)} style={{ backgroundColor: '#1a1a1a', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
                     
+                    {/* BOTÃO REMOVER INDIVIDUAL (Mobile) */}
+                    {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
+                        <button
+                            onClick={(e) => categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e)}
+                            style={{ position: 'absolute', top: '5px', left: '5px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#ff4444', border: 'none', borderRadius: '50%', width: '26px', height: '26px', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(3px)' }}
+                        >
+                            <Trash2 size={14} />
+                        </button>
+                    )}
+
                     {/* Imagem da Capa */}
                     <img src={item.stream_icon || item.cover || CAPA_PADRAO} alt={item.name} loading="lazy" onError={(e) => { e.target.src = CAPA_PADRAO; }} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '90px' : '150px', objectFit: 'cover', backgroundColor: '#000' }} />
                     
-                    {/* NOVO: Selo de Nota (Rating) no canto superior direito */}
-                    {item.rating && (
-                        <div style={{ 
-                            position: 'absolute', top: '5px', right: '5px', 
-                            backgroundColor: 'rgba(0,0,0,0.7)', 
-                            color: '#f5c518', 
-                            padding: '3px 7px', 
-                            borderRadius: '12px', 
-                            fontSize: '11px', 
-                            fontWeight: 'bold', 
-                            display: 'flex', alignItems: 'center', gap: '3px',
-                            backdropFilter: 'blur(3px)'
-                        }}>
+                    {/* Selo de Nota (Rating) */}
+                    {item.rating && item.rating !== "0" && item.rating !== 0 && (
+                        <div style={{ position: 'absolute', top: '5px', right: '5px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#f5c518', padding: '3px 7px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px', backdropFilter: 'blur(3px)' }}>
                             <Star size={12} fill="#f5c518" /> {parseFloat(item.rating).toFixed(1)}
                         </div>
                     )}
@@ -237,10 +383,8 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                 style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} 
               />
               
-              {/* Gradiente de transição suave do banner para o corpo do modal */}
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '150px', background: 'linear-gradient(to top, #141414 0%, transparent 100%)' }}></div>
               
-              {/* Botão de Fechar no Topo Direito */}
               <button onClick={() => setItemDetalhes(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.6)', border: 'none', color: 'white', borderRadius: '50%', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
                 <X size={20} />
               </button>
@@ -249,7 +393,6 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
             {/* CORPO DO MODAL (Com scroll nativo) */}
             <div className="hide-scroll" style={{ flex: 1, overflowY: 'auto', padding: '0 20px 30px 20px', position: 'relative', marginTop: '-60px', zIndex: 10 }}>
               
-              {/* Título Principal */}
               <h2 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: '900', textShadow: '0 2px 8px rgba(0,0,0,0.9)', lineHeight: '1.2' }}>
                 {itemDetalhes.name}
               </h2>
@@ -260,8 +403,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                 </div>
               ) : (
                 <>
-                  {/* Meta Dados (Classificação, Ano, Duração, Género) */}
-                  <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: '#ccc', marginBottom: '25px', alignItems: 'center', flexWrap: 'wrap', fontWeight: '500' }}>
+                  <div style={{ display: 'flex', gap: '12px', fontSize: '13px', color: '#ccc', marginBottom: '20px', alignItems: 'center', flexWrap: 'wrap', fontWeight: '500' }}>
                     {dadosDetalhes?.info?.rating && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#f5c518', fontWeight: 'bold' }}>
                         <Star size={14} fill="#f5c518" /> {parseFloat(dadosDetalhes.info.rating).toFixed(1)}
@@ -272,20 +414,49 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                     {dadosDetalhes?.info?.genre && <span style={{ background: '#333', padding: '3px 10px', borderRadius: '4px', fontSize: '11px', color: '#fff' }}>{dadosDetalhes.info.genre}</span>}
                   </div>
 
-                  {/* Botão de Ação Primário (Vermelho) */}
-                  {tipoAtual === 'filmes' && dadosDetalhes?.movie_data && (
-                    <button onClick={() => handlePlay(dadosDetalhes.movie_data.stream_id, dadosDetalhes.movie_data.container_extension)} style={{ width: '100%', padding: '16px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '25px', boxShadow: '0 4px 20px rgba(229, 9, 20, 0.4)' }}>
-                      <Play fill="currentColor" size={20} /> Assistir Filme
-                    </button>
-                  )}
+                  {/* ========================================== */}
+                  {/* ÁREA DE BOTÕES (PLAY / CONTINUAR / FAVORITAR) */}
+                  {/* ========================================== */}
+                  <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+                    
+                    {tipoAtual === 'filmes' && dadosDetalhes?.movie_data && (
+                      (() => {
+                        const idFilme = dadosDetalhes.movie_data.stream_id;
+                        const ext = dadosDetalhes.movie_data.container_extension;
+                        const prog = progressos[idFilme] || 0;
+                        return (
+                          <div style={{ flex: 1, display: 'flex', gap: '8px' }}>
+                            {prog > 15 ? (
+                              <>
+                                <button onClick={() => handlePlay(idFilme, ext, false, prog)} style={{ flex: 2, padding: '14px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '6px' }}>
+                                  <Play fill="currentColor" size={18} /> Continuar
+                                </button>
+                                <button onClick={() => handlePlay(idFilme, ext, false, 0)} style={{ flex: 1, padding: '14px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '8px', fontSize: '13px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                                  <RefreshCw size={16} /> Zero
+                                </button>
+                              </>
+                            ) : (
+                              <button onClick={() => handlePlay(idFilme, ext, false, 0)} style={{ flex: 1, padding: '14px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                                <Play fill="currentColor" size={20} /> Assistir Filme
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()
+                    )}
 
-                  {tipoAtual === 'ao-vivo' && (
-                    <button onClick={() => handlePlayLive(itemDetalhes.stream_id)} style={{ width: '100%', padding: '16px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '25px', boxShadow: '0 4px 20px rgba(229, 9, 20, 0.4)' }}>
-                      <Play fill="currentColor" size={20} /> Assistir ao Vivo
-                    </button>
-                  )}
+                    {tipoAtual === 'ao-vivo' && (
+                      <button onClick={() => handlePlayLive(itemDetalhes.stream_id)} style={{ flex: 1, padding: '14px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '8px', fontSize: '15px', fontWeight: 'bold', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                        <Play fill="currentColor" size={20} /> Assistir ao Vivo
+                      </button>
+                    )}
 
-                  {/* Sinopse Descritiva */}
+                    {/* Botão de Favoritar (Lista) */}
+                    <button onClick={() => toggleMinhaLista(itemDetalhes)} style={{ width: '50px', flexShrink: 0, backgroundColor: itemEstaNaLista ? '#1a1a1a' : '#333', color: itemEstaNaLista ? '#aaa' : '#fff', border: `1px solid ${itemEstaNaLista ? '#333' : '#444'}`, borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: '0.2s' }}>
+                      {itemEstaNaLista ? <Check size={22} /> : <Bookmark size={22} />}
+                    </button>
+                  </div>
+
                   <p style={{ fontSize: '14px', color: '#bbb', lineHeight: '1.6', margin: '0 0 30px 0' }}>
                     {dadosDetalhes?.info?.plot || "Nenhuma sinopse disponível para este conteúdo."}
                   </p>
@@ -313,31 +484,38 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                         ))}
                       </div>
 
-                      {/* Lista Vertical de Episódios Protegida (Flex Shrink) */}
+                      {/* Lista Vertical de Episódios */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        {dadosDetalhes.episodes[temporadaSelecionada]?.map((ep) => (
-                          <div key={ep.id} onClick={() => handlePlay(ep.id, ep.container_extension, true)} style={{ display: 'flex', gap: '15px', padding: '10px', backgroundColor: '#1a1a1a', borderRadius: '12px', alignItems: 'center', cursor: 'pointer', border: '1px solid #2a2a2a' }}>
-                            
-                            {/* Imagem do Episódio (Tamanho Fixo e Protegido) */}
-                            <div style={{ position: 'relative', width: '130px', height: '75px', flexShrink: 0 }}>
-                              <img src={ep.info?.movie_image || ep.info?.cover || CAPA_PADRAO} alt={ep.title} onError={e=>e.target.src=CAPA_PADRAO} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
-                              <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', padding: '8px', display: 'flex', backdropFilter: 'blur(2px)' }}>
-                                <Play size={16} color="white" fill="white" />
+                        {dadosDetalhes.episodes[temporadaSelecionada]?.map((ep) => {
+                          const tempoEp = progressos[ep.id] || 0;
+                          return (
+                            <div key={ep.id} onClick={() => handlePlay(ep.id, ep.container_extension, true, tempoEp > 15 ? tempoEp : 0)} style={{ display: 'flex', gap: '15px', padding: '10px', backgroundColor: '#1a1a1a', borderRadius: '12px', alignItems: 'center', cursor: 'pointer', border: '1px solid #2a2a2a' }}>
+                              
+                              <div style={{ position: 'relative', width: '130px', height: '75px', flexShrink: 0 }}>
+                                <img src={ep.info?.movie_image || ep.info?.cover || CAPA_PADRAO} alt={ep.title} onError={e=>e.target.src=CAPA_PADRAO} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
+                                
+                                {/* Mostrar a barra vermelha de progresso no episódio */}
+                                {tempoEp > 15 && (
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, height: '4px', backgroundColor: '#e50914', width: '60%', borderBottomLeftRadius: '8px' }}></div>
+                                )}
+
+                                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', padding: '8px', display: 'flex', backdropFilter: 'blur(2px)' }}>
+                                  <Play size={16} color="white" fill="white" />
+                                </div>
                               </div>
+                              
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {ep.episode_num}. {ep.title || `Episódio ${ep.episode_num}`}
+                                </div>
+                                <div style={{ fontSize: '12px', color: '#888', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                                  {tempoEp > 15 ? <span style={{color: '#e50914', fontWeight: 'bold'}}>Continuar assistindo...</span> : (ep.info?.plot || 'Toque para assistir agora.')}
+                                </div>
+                              </div>
+                              
                             </div>
-                            
-                            {/* Texto do Episódio (Ajustável) */}
-                            <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                {ep.episode_num}. {ep.title || `Episódio ${ep.episode_num}`}
-                              </div>
-                              <div style={{ fontSize: '12px', color: '#888', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                {ep.info?.plot || 'Toque para assistir agora.'}
-                              </div>
-                            </div>
-                            
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   )}

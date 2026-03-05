@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Player from './components/Player';
 import AdminPanel from './components/AdminPanel';
-import { Film, Tv, Radio, Clock, LayoutGrid, LogOut, Settings, Play, RefreshCw, Star, Bookmark, Check, Search } from 'lucide-react';
+import { Film, Tv, Radio, Clock, LayoutGrid, LogOut, Settings, Play, RefreshCw, Star, Bookmark, Check, Search, Trash2 } from 'lucide-react';
 
 const CAPA_PADRAO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 const EPISODIO_PADRAO = CAPA_PADRAO;
@@ -177,6 +177,55 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     });
   };
 
+  // ==========================================
+  // FUNÇÕES DE REMOÇÃO (HISTÓRICO E MINHA LISTA)
+  // ==========================================
+  const removerDoHistorico = (itemParaRemover, e) => {
+    if (e) {
+      e.stopPropagation(); 
+      e.preventDefault();
+    }
+    setHistorico(prevHistorico => {
+      const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
+      const novaLista = prevHistorico.filter(i => (i.stream_id || i.series_id) !== idUnico);
+      localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+      return novaLista;
+    });
+  };
+
+  const limparTodoHistorico = () => {
+    if (window.confirm(`Deseja limpar todo o histórico de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) {
+      setHistorico(prevHistorico => {
+        const novaLista = prevHistorico.filter(i => i.tipo_salvo !== tipoAtual);
+        localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+        return novaLista;
+      });
+    }
+  };
+
+  const removerDaMinhaLista = (itemParaRemover, e) => {
+    if (e) {
+      e.stopPropagation(); 
+      e.preventDefault();
+    }
+    setMinhaLista(prevLista => {
+      const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
+      const novaLista = prevLista.filter(i => (i.stream_id || i.series_id) !== idUnico);
+      localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+      return novaLista;
+    });
+  };
+
+  const limparTodaMinhaLista = () => {
+    if (window.confirm(`Deseja limpar toda a sua lista de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) {
+      setMinhaLista(prevLista => {
+        const novaLista = prevLista.filter(i => i.tipo_salvo !== tipoAtual);
+        localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
+        return novaLista;
+      });
+    }
+  };
+
   const toggleMinhaLista = (item) => {
     if (!item) return;
     setMinhaLista(prevLista => {
@@ -231,8 +280,8 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     const queryParams = `?server_url=${encodeURIComponent(playlistAtiva.server_url)}&user=${encodeURIComponent(playlistAtiva.iptv_username)}&passw=${encodeURIComponent(playlistAtiva.iptv_password)}`;
     
     Promise.all([
-      fetch(`http://72.60.3.89:8006/api/${endpoint}${queryParams}`).then(res => res.json()),
-      fetch(`http://72.60.3.89:8006/api/categorias/${tipoAtual}${queryParams}`).then(res => res.json())
+      fetch(`/api/${endpoint}${queryParams}`).then(res => res.json()),
+      fetch(`/api/categorias/${tipoAtual}${queryParams}`).then(res => res.json())
     ]).then(([dadosConteudo, dadosCategorias]) => {
       setConteudo(Array.isArray(dadosConteudo) ? dadosConteudo : []);
       setCategorias(Array.isArray(dadosCategorias) ? dadosCategorias : []);
@@ -353,7 +402,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
     if (tipoAtual === 'filmes') {
       setCarregando(true);
-      fetch(`http://72.60.3.89:8006/api/filmes/${item.stream_id}${queryParams}`)
+      fetch(`/api/filmes/${item.stream_id}${queryParams}`)
         .then(res => res.json())
         .then(data => {
           setFilmeDetalhes(data);
@@ -363,7 +412,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
     } else if (tipoAtual === 'ao-vivo') {
       setCarregando(true);
-      fetch(`http://72.60.3.89:8006/api/epg?stream_id=${item.stream_id}${queryParams}`)
+      fetch(`/api/epg?stream_id=${item.stream_id}${queryParams}`)
         .then(res => res.json())
         .then(data => {
           setCanalDetalhes({ info: item, epg: Array.isArray(data?.epg_listings) ? data.epg_listings : [] });
@@ -377,7 +426,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
     } else {
       setCarregando(true);
-      fetch(`http://72.60.3.89:8006/api/series/${item.series_id}${queryParams}`)
+      fetch(`/api/series/${item.series_id}${queryParams}`)
         .then(res => res.json())
         .then(data => {
           setSerieDetalhes(data);
@@ -742,23 +791,58 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                             {conteudoParaExibir.length === 0 ? (
                             <p style={{ textAlign: 'center', color: '#aaa', marginTop: '50px' }}>Nenhum conteúdo encontrado nesta vista.</p>
                             ) : (
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
-                                {conteudoParaExibir.map((item, index) => (
-                                <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
-                                    style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
-                                    
-                                    {/* INÍCIO DO SELO (GRELHA PRINCIPAL) */}
-                                    {item?.rating && item.rating !== "0" && item.rating !== 0 && (
-                                    <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
-                                        <Star size={12} fill="currentColor" /> {item.rating}
+                            <>
+                                {/* BOTÃO DE LIMPAR TODO O HISTÓRICO / LISTA */}
+                                {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && conteudoParaExibir.length > 0 && (
+                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
+                                        <button
+                                            tabIndex={0}
+                                            className="tv-focusable"
+                                            onClick={categoriaSelecionada === 'recentes' ? limparTodoHistorico : limparTodaMinhaLista}
+                                            style={{ padding: '8px 15px', backgroundColor: '#333', color: '#fff', border: '1px solid #444', borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                        >
+                                            <Trash2 size={16} color="#ff4444" /> Limpar {categoriaSelecionada === 'recentes' ? 'Histórico' : 'Lista'} de {tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV'}
+                                        </button>
                                     </div>
-                                    )}
+                                )}
 
-                                    <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
-                                    <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+                                    {conteudoParaExibir.map((item, index) => (
+                                    <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
+                                        style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
+                                        
+                                        {/* NOVO: BOTÃO REMOVER INDIVIDUAL DOS RECENTES E MINHA LISTA */}
+                                        {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
+                                            <button
+                                                tabIndex={0}
+                                                className="tv-focusable"
+                                                onClick={(e) => categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e)}
+                                                onKeyDown={(e) => { if (e.key === 'Enter') categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e); }}
+                                                style={{
+                                                    position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(20,20,20,0.9)',
+                                                    color: '#ff4444', border: '1px solid #ff4444', borderRadius: '4px', padding: '6px',
+                                                    zIndex: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                    transition: '0.2s'
+                                                }}
+                                                title={categoriaSelecionada === 'recentes' ? "Remover do Histórico" : "Remover da Lista"}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
+
+                                        {/* INÍCIO DO SELO (GRELHA PRINCIPAL) */}
+                                        {item?.rating && item.rating !== "0" && item.rating !== 0 && (
+                                        <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
+                                            <Star size={12} fill="currentColor" /> {item.rating}
+                                        </div>
+                                        )}
+
+                                        <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
+                                        <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
+                                    </div>
+                                    ))}
                                 </div>
-                                ))}
-                            </div>
+                            </>
                             )}
                             
                             {categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' && conteudoParaExibir.length < conteudoSeguro.filter(item => String(item?.category_id) === String(categoriaSelecionada)).length && (
@@ -778,3 +862,4 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     </div>
   );
 }
+

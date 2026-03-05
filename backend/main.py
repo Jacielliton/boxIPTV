@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 import jwt
 import bcrypt
-import requests
+import httpx
 import uvicorn
 import time
 
@@ -21,10 +21,17 @@ app = FastAPI(title="BoxIPTV Pro")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
-    allow_credentials=False, # Precisa ser False quando usamos "*"
+    allow_origins=[
+        "http://localhost:3006",      # Para testes de desenvolvimento local com o Vite
+        "http://iptv.tecnopriv.top",  # Acesso web via HTTP
+        "https://iptv.tecnopriv.top", # Acesso web seguro via HTTPS
+        "capacitor://localhost",      # Essencial para o App Mobile (iOS) rodar
+        "http://localhost",           # Essencial para o App Mobile (Android Webview)
+        "ionic://localhost"
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],  
+    allow_headers=["*"],
 )
 
 cache = {}
@@ -307,22 +314,23 @@ def admin_remover_playlist(playlist_id: int, admin: models.User = Depends(get_cu
 # ==========================================
 
 @app.get("/api/auth", tags=["IPTV Proxy"])
-def verificar_login_iptv(server_url: str, user: str, passw: str):
+async def verificar_login_iptv(server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=15)
-        response.raise_for_status()
-        dados = response.json()
-        if "user_info" in dados and dados["user_info"].get("auth") == 1:
-            return {"status": "sucesso", "mensagem": "Login aprovado no IPTV"}
-        else:
-            raise HTTPException(status_code=401, detail="Usuário ou senha IPTV incorretos.")
-    except Exception:
-        raise HTTPException(status_code=400, detail="Não foi possível conectar ao servidor IPTV.")
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=20.0) # Notar o 'await'
+            response.raise_for_status()
+            dados = response.json()
+            if "user_info" in dados and dados["user_info"].get("auth") == 1:
+                return {"status": "sucesso", "mensagem": "Login aprovado no IPTV"}
+            else:
+                raise HTTPException(status_code=401, detail="Usuário ou senha IPTV incorretos.")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Não foi possível conectar ao servidor IPTV.")
 
 @app.get("/api/filmes", tags=["IPTV Proxy"])
-def get_filmes(server_url: str, user: str, passw: str):
+async def get_filmes(server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     cache_key = get_cache_key(base_url, user, "filmes")
     agora = time.time()
@@ -330,20 +338,21 @@ def get_filmes(server_url: str, user: str, passw: str):
         return cache[cache_key]["data"]
     
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action=get_vod_streams"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=20)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            dados = response.json()
-            cache[cache_key] = {"data": dados, "timestamp": agora}
-            return dados
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=20.0) # Notar o 'await'
+            response.raise_for_status()
+            try:
+                dados = response.json()
+                cache[cache_key] = {"data": dados, "timestamp": agora}
+                return dados
+            except ValueError:
+                return [] # Escudo Ativo
+        except Exception:
             return [] # Escudo Ativo
-    except Exception:
-        return [] # Escudo Ativo
 
 @app.get("/api/series", tags=["IPTV Proxy"])
-def get_series(server_url: str, user: str, passw: str):
+async def get_series(server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     cache_key = get_cache_key(base_url, user, "series")
     agora = time.time()
@@ -351,34 +360,36 @@ def get_series(server_url: str, user: str, passw: str):
         return cache[cache_key]["data"]
         
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action=get_series"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=20)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            dados = response.json()
-            cache[cache_key] = {"data": dados, "timestamp": agora}
-            return dados
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=20)
+            response.raise_for_status()
+            try:
+                dados = response.json()
+                cache[cache_key] = {"data": dados, "timestamp": agora}
+                return dados
+            except ValueError:
+                return []
+        except Exception:
             return []
-    except Exception:
-        return []
 
 @app.get("/api/series/{series_id}", tags=["IPTV Proxy"])
-def get_series_info(series_id: int, server_url: str, user: str, passw: str):
+async def get_series_info(series_id: int, server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action=get_series_info&series_id={series_id}"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=15)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            return response.json()
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=15)
+            response.raise_for_status()
+            try:
+                return response.json()
+            except ValueError:
+                return {"info": {"name": "Série", "description": "Info indisponível."}, "episodes": {}}
+        except Exception:
             return {"info": {"name": "Série", "description": "Info indisponível."}, "episodes": {}}
-    except Exception:
-        return {"info": {"name": "Série", "description": "Info indisponível."}, "episodes": {}}
 
 @app.get("/api/ao-vivo", tags=["IPTV Proxy"])
-def get_ao_vivo(server_url: str, user: str, passw: str):
+async def get_ao_vivo(server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     cache_key = get_cache_key(base_url, user, "ao_vivo")
     agora = time.time()
@@ -386,20 +397,21 @@ def get_ao_vivo(server_url: str, user: str, passw: str):
         return cache[cache_key]["data"]
         
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action=get_live_streams"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=20)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            dados = response.json()
-            cache[cache_key] = {"data": dados, "timestamp": agora}
-            return dados
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=20)
+            response.raise_for_status()
+            try:
+                dados = response.json()
+                cache[cache_key] = {"data": dados, "timestamp": agora}
+                return dados
+            except ValueError:
+                return []
+        except Exception:
             return []
-    except Exception:
-        return []
 
 @app.get("/api/categorias/{tipo}", tags=["IPTV Proxy"])
-def get_categorias(tipo: str, server_url: str, user: str, passw: str):
+async def get_categorias(tipo: str, server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     action_map = {"filmes": "get_vod_categories", "series": "get_series_categories", "ao-vivo": "get_live_categories"}
     if tipo not in action_map:
@@ -412,34 +424,36 @@ def get_categorias(tipo: str, server_url: str, user: str, passw: str):
         return cache[cache_key]["data"]
         
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action={action}"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=15)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            dados = response.json()
-            cache[cache_key] = {"data": dados, "timestamp": agora}
-            return dados
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=15)
+            response.raise_for_status()
+            try:
+                dados = response.json()
+                cache[cache_key] = {"data": dados, "timestamp": agora}
+                return dados
+            except ValueError:
+                return []
+        except Exception:
             return []
-    except Exception:
-        return []
 
 @app.get("/api/filmes/{vod_id}", tags=["IPTV Proxy"])
-def get_filme_info(vod_id: int, server_url: str, user: str, passw: str):
+async def get_filme_info(vod_id: int, server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action=get_vod_info&vod_id={vod_id}"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=15)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            return response.json()
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=15)
+            response.raise_for_status()
+            try:
+                return response.json()
+            except ValueError:
+                return {"info": {"name": "Filme", "description": "Informações não disponibilizadas pelo servidor."}, "movie_data": {"stream_id": vod_id, "container_extension": "mp4"}}
+        except Exception:
             return {"info": {"name": "Filme", "description": "Informações não disponibilizadas pelo servidor."}, "movie_data": {"stream_id": vod_id, "container_extension": "mp4"}}
-    except Exception:
-        return {"info": {"name": "Filme", "description": "Informações não disponibilizadas pelo servidor."}, "movie_data": {"stream_id": vod_id, "container_extension": "mp4"}}
 
 @app.get("/api/epg", tags=["IPTV Proxy"])
-def get_epg(stream_id: int, server_url: str, user: str, passw: str):
+async def get_epg(stream_id: int, server_url: str, user: str, passw: str):
     base_url = limpar_url_iptv(server_url)
     cache_key = get_cache_key(base_url, user, f"epg_{stream_id}")
     agora = time.time()
@@ -447,17 +461,18 @@ def get_epg(stream_id: int, server_url: str, user: str, passw: str):
         return cache[cache_key]["data"]
         
     api_url = f"{base_url}/player_api.php?username={user}&password={passw}&action=get_short_epg&stream_id={stream_id}&limit=10"
-    try:
-        response = requests.get(api_url, headers=HEADERS_IPTV, timeout=10)
-        response.raise_for_status()
+    async with httpx.AsyncClient() as client:
         try:
-            dados = response.json()
-            cache[cache_key] = {"data": dados, "timestamp": agora}
-            return dados
-        except ValueError:
+            response = await client.get(api_url, headers=HEADERS_IPTV, timeout=10)
+            response.raise_for_status()
+            try:
+                dados = response.json()
+                cache[cache_key] = {"data": dados, "timestamp": agora}
+                return dados
+            except ValueError:
+                return {"epg_listings": []}
+        except Exception:
             return {"epg_listings": []}
-    except Exception:
-        return {"epg_listings": []}
 
 @app.delete("/api/playlists/{playlist_id}", tags=["Playlists"])
 def deletar_playlist(playlist_id: int, current_user: models.User = Depends(get_current_user), db: Session = Depends(get_db)):

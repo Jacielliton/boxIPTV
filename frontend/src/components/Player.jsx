@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import mpegts from 'mpegts.js';
+import Hls from 'hls.js'; // NOVO: Importação do HLS
 import { Play, Pause, Maximize, ArrowLeft, Loader2 } from 'lucide-react';
 
 export default function Player({ channel, onClose, startTime }) {
     const videoRef = useRef(null);
-    const playerRef = useRef(null);
+    const playerRef = useRef(null); // Vai guardar a instância mpegts ou hls
     const containerRef = useRef(null);
     
     const [isPlaying, setIsPlaying] = useState(true);
-    const [isBuffering, setIsBuffering] = useState(true); // NOVO: Estado de carregamento
+    const [isBuffering, setIsBuffering] = useState(true);
     const [progresso, setProgresso] = useState(0);
     const [duracao, setDuracao] = useState(0);
     const [showControls, setShowControls] = useState(true);
@@ -16,7 +17,9 @@ export default function Player({ channel, onClose, startTime }) {
 
     if (!channel || !channel.url) return null;
 
+    // LÓGICA INTELIGENTE DE DETEÇÃO DE FORMATOS
     const isVod = channel.url.toLowerCase().includes('.mp4') || channel.url.toLowerCase().includes('.mkv') || channel.url.toLowerCase().includes('.avi');
+    const isHls = channel.url.toLowerCase().includes('.m3u8'); // NOVO: Deteção de HLS
 
     const toggleTelaCheia = () => {
         if (!document.fullscreenElement) {
@@ -44,7 +47,7 @@ export default function Player({ channel, onClose, startTime }) {
         }, 3000);
     };
 
-    // NOVO: Atalhos de Teclado
+    // Atalhos de Teclado
     useEffect(() => {
         const handleKeyDown = (e) => {
             resetControlsTimeout();
@@ -92,19 +95,61 @@ export default function Player({ channel, onClose, startTime }) {
         };
     }, [onClose]);
 
+    // MÁGICA DO LEITOR: Decide qual motor usar baseado no link
     useEffect(() => {
-        setIsBuffering(true); // Começa a carregar
+        setIsBuffering(true); 
         
-        if (isVod) {
+        // Função para limpar instâncias anteriores
+        const destroyPlayer = () => {
             if (playerRef.current) {
-                playerRef.current.destroy();
+                if (typeof playerRef.current.destroy === 'function') {
+                    playerRef.current.destroy(); // Limpa hls.js e mpegts.js
+                }
                 playerRef.current = null;
             }
+        };
+
+        if (isVod) {
+            destroyPlayer();
             videoRef.current.src = channel.url;
             videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+            
+        } else if (isHls) {
+            // NOVO: MOTOR HLS (.m3u8)
+            destroyPlayer();
+            if (Hls.isSupported()) {
+                const hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
+                playerRef.current = hls;
+                hls.loadSource(channel.url);
+                hls.attachMedia(videoRef.current);
+                hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                    videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+                });
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                destroyPlayer();
+                                break;
+                        }
+                    }
+                });
+            } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
+                // Suporte nativo para Apple/Safari
+                videoRef.current.src = channel.url;
+                videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+            }
+            
         } else {
+            // MOTOR MPEG-TS (.ts / TV Ao Vivo Clássico)
             if (mpegts.getFeatureList().mseLivePlayback) {
-                if (playerRef.current) playerRef.current.destroy();
+                destroyPlayer();
                 playerRef.current = mpegts.createPlayer({ type: 'mse', isLive: true, url: channel.url });
                 playerRef.current.attachMediaElement(videoRef.current);
                 playerRef.current.load();
@@ -115,10 +160,7 @@ export default function Player({ channel, onClose, startTime }) {
         resetControlsTimeout();
 
         return () => {
-            if (playerRef.current) {
-                playerRef.current.destroy();
-                playerRef.current = null;
-            }
+            destroyPlayer();
         };
     }, [channel]);
 
@@ -166,14 +208,13 @@ export default function Player({ channel, onClose, startTime }) {
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={() => { if (startTime > 0) videoRef.current.currentTime = startTime; }}
                 onClick={togglePlay}
-                onDoubleClick={toggleTelaCheia} // NOVO: Duplo clique
-                onWaiting={() => setIsBuffering(true)} // NOVO: Sabe quando travou
-                onPlaying={() => setIsBuffering(false)} // NOVO: Sabe quando voltou
+                onDoubleClick={toggleTelaCheia} 
+                onWaiting={() => setIsBuffering(true)} 
+                onPlaying={() => setIsBuffering(false)} 
                 referrerPolicy="no-referrer" 
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
             />
 
-            {/* NOVO: SPINNER DE LOADING */}
             {isBuffering && (
                 <div style={{ position: 'absolute', pointerEvents: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
                     <Loader2 size={60} color="#e50914" className="animate-spin" />
@@ -199,7 +240,6 @@ export default function Player({ channel, onClose, startTime }) {
                             {isPlaying ? <Pause size={35} fill="currentColor" /> : <Play size={35} fill="currentColor" />}
                         </button>
                         
-                        {/* LÓGICA INTELIGENTE: VOD ou AO VIVO */}
                         {isVod ? (
                             <>
                                 <span style={{ fontSize: '14px' }}>{formatTime(progresso)}</span>
@@ -214,7 +254,7 @@ export default function Player({ channel, onClose, startTime }) {
                         ) : (
                             <div style={{ flex: 1, display: 'flex', alignItems: 'center' }}>
                                 <span style={{ backgroundColor: '#e50914', padding: '2px 8px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', letterSpacing: '1px' }}>
-                                    ● AO VIVO
+                                    ● AO VIVO {isHls && '(HLS)'}
                                 </span>
                             </div>
                         )}
