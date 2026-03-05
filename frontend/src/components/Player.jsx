@@ -139,6 +139,7 @@ export default function Player({ channel, onClose, startTime }) {
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={() => { if (startTime > 0) videoRef.current.currentTime = startTime; }}
                 onClick={togglePlay}
+                referrerPolicy="no-referrer" 
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
             />
 
