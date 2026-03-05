@@ -73,7 +73,7 @@ export default function Player({ channel, onClose, startTime }) {
                 playerRef.current = null;
             }
             videoRef.current.src = channel.url;
-            abrirTelaCheia(); 
+            // APAGUE A LINHA abrirTelaCheia(); QUE ESTAVA AQUI!
             videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
         } else {
             if (mpegts.getFeatureList().mseLivePlayback) {
@@ -81,7 +81,7 @@ export default function Player({ channel, onClose, startTime }) {
                 playerRef.current = mpegts.createPlayer({ type: 'mse', isLive: true, url: channel.url });
                 playerRef.current.attachMediaElement(videoRef.current);
                 playerRef.current.load();
-                abrirTelaCheia();
+                // APAGUE A LINHA abrirTelaCheia(); QUE ESTAVA AQUI!
                 playerRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
             }
         }
