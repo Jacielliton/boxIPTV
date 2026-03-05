@@ -1,9 +1,11 @@
 import { useState } from 'react';
+import { User, Lock, Eye, EyeOff, Loader2, MonitorPlay } from 'lucide-react';
 
 export default function Login({ onLogin }) {
   const [modoLogin, setModoLogin] = useState(true); // true = Login, false = Registo
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [mostrarSenha, setMostrarSenha] = useState(false);
   
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -22,8 +24,10 @@ export default function Login({ onLogin }) {
     setCarregando(true);
 
     try {
-      const endpoint = modoLogin ? '/api/login' : '/api/register';
-      const response = await fetch(`${endpoint}`, {
+      // Os caminhos relativos puros ('/api/...') garantem que o mudar_ambiente.py funciona perfeitamente!
+      const url = modoLogin ? '/api/login' : '/api/register';
+      
+      const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
@@ -44,9 +48,10 @@ export default function Login({ onLogin }) {
           premiumUntil: data.premium_until
         });
       } else {
-        // Se for registo, mostra sucesso e muda para a aba de login
-        setSucesso(data.message);
+        // Se for registo, mostra sucesso, muda para a aba de login e limpa a senha por segurança
+        setSucesso(data.message || 'Conta criada com sucesso! Faça Login.');
         setModoLogin(true);
+        setPassword('');
       }
 
     } catch (error) {
@@ -57,55 +62,85 @@ export default function Login({ onLogin }) {
   };
 
   return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#141414', color: 'white' }}>
-      <form onSubmit={handleSubmit} style={{ background: '#222', padding: '40px', borderRadius: '10px', width: '100%', maxWidth: '400px', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }}>
-        <h2 style={{ textAlign: 'center', color: '#e50914', marginBottom: '10px' }}>BoxIPTV Pro</h2>
-        <p style={{ textAlign: 'center', color: '#aaa', marginBottom: '30px' }}>
-          {modoLogin ? 'Entre na sua conta' : 'Crie sua conta (7 dias grátis)'}
-        </p>
+    <div style={{ 
+      display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', 
+      backgroundColor: '#141414', color: 'white',
+      background: 'radial-gradient(circle at center, #2a0808 0%, #141414 100%)',
+      padding: '20px', boxSizing: 'border-box'
+    }}>
+      <form onSubmit={handleSubmit} style={{ 
+        background: 'rgba(20, 20, 20, 0.95)', padding: '40px 30px', borderRadius: '12px', 
+        width: '100%', maxWidth: '400px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)',
+        border: '1px solid #333', backdropFilter: 'blur(10px)'
+      }}>
         
-        {erro && <div style={{ color: '#ff4444', marginBottom: '15px', textAlign: 'center', fontSize: '14px', background: 'rgba(255,68,68,0.1)', padding: '10px', borderRadius: '5px' }}>{erro}</div>}
-        {sucesso && <div style={{ color: '#00C851', marginBottom: '15px', textAlign: 'center', fontSize: '14px', background: 'rgba(0,200,81,0.1)', padding: '10px', borderRadius: '5px' }}>{sucesso}</div>}
+        <div style={{ textAlign: 'center', marginBottom: '30px' }}>
+            <MonitorPlay size={48} color="#e50914" style={{ marginBottom: '10px' }} />
+            <h2 style={{ margin: 0, fontSize: '28px', letterSpacing: '1px' }}>BoxIPTV <span style={{color: '#e50914'}}>Pro</span></h2>
+            <p style={{ color: '#aaa', margin: '10px 0 0 0', fontSize: '14px' }}>
+            {modoLogin ? 'Aceda à sua conta para continuar' : 'Crie a sua conta (7 dias grátis)'}
+            </p>
+        </div>
+        
+        {erro && <div style={{ color: '#ff4444', marginBottom: '20px', textAlign: 'center', fontSize: '14px', background: 'rgba(255,68,68,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(255,68,68,0.3)' }}>{erro}</div>}
+        {sucesso && <div style={{ color: '#00C851', marginBottom: '20px', textAlign: 'center', fontSize: '14px', background: 'rgba(0,200,81,0.1)', padding: '12px', borderRadius: '8px', border: '1px solid rgba(0,200,81,0.3)' }}>{sucesso}</div>}
 
-        <div style={{ marginBottom: '20px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>Usuário</label>
+        <div style={{ marginBottom: '20px', position: 'relative' }}>
+          <User size={20} color="#888" style={{ position: 'absolute', left: '15px', top: '14px' }} />
           <input 
             type="text" 
+            placeholder="Nome de Utilizador"
             value={username} 
             onChange={(e) => setUsername(e.target.value)}
             className="tv-focusable"
-            style={{ width: '100%', padding: '12px', borderRadius: '5px', border: 'none', background: '#333', color: 'white', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '14px 15px 14px 45px', borderRadius: '8px', border: '1px solid #444', background: '#1a1a1a', color: 'white', outline: 'none', boxSizing: 'border-box', fontSize: '15px', transition: 'border 0.3s' }}
+            onFocus={(e) => e.target.style.border = '1px solid #e50914'}
+            onBlur={(e) => e.target.style.border = '1px solid #444'}
           />
         </div>
 
-        <div style={{ marginBottom: '30px' }}>
-          <label style={{ display: 'block', marginBottom: '8px', color: '#aaa' }}>Senha</label>
+        <div style={{ marginBottom: '30px', position: 'relative' }}>
+          <Lock size={20} color="#888" style={{ position: 'absolute', left: '15px', top: '14px' }} />
           <input 
-            type="password" 
+            type={mostrarSenha ? "text" : "password"} 
+            placeholder="Palavra-passe"
             value={password} 
             onChange={(e) => setPassword(e.target.value)}
             className="tv-focusable"
-            style={{ width: '100%', padding: '12px', borderRadius: '5px', border: 'none', background: '#333', color: 'white', outline: 'none', boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: '14px 45px 14px 45px', borderRadius: '8px', border: '1px solid #444', background: '#1a1a1a', color: 'white', outline: 'none', boxSizing: 'border-box', fontSize: '15px', transition: 'border 0.3s' }}
+            onFocus={(e) => e.target.style.border = '1px solid #e50914'}
+            onBlur={(e) => e.target.style.border = '1px solid #444'}
           />
+          <button 
+            type="button"
+            onClick={() => setMostrarSenha(!mostrarSenha)}
+            tabIndex="-1"
+            style={{ position: 'absolute', right: '15px', top: '14px', background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 0 }}
+          >
+            {mostrarSenha ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
         </div>
 
         <button 
           type="submit" 
           disabled={carregando}
           className="tv-focusable"
-          style={{ width: '100%', padding: '14px', backgroundColor: carregando ? '#555' : '#e50914', color: 'white', border: 'none', borderRadius: '5px', fontSize: '16px', fontWeight: 'bold', cursor: carregando ? 'not-allowed' : 'pointer', transition: '0.3s', marginBottom: '15px' }}
+          style={{ width: '100%', padding: '14px', backgroundColor: carregando ? '#e5091480' : '#e50914', color: 'white', border: 'none', borderRadius: '8px', fontSize: '16px', fontWeight: 'bold', cursor: carregando ? 'not-allowed' : 'pointer', transition: 'all 0.3s', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', boxShadow: '0 4px 15px rgba(229, 9, 20, 0.4)' }}
         >
-          {carregando ? 'Aguarde...' : (modoLogin ? 'Entrar' : 'Registar')}
+          {carregando ? <><Loader2 size={20} className="animate-spin" /> A processar...</> : (modoLogin ? 'Entrar' : 'Registar Conta')}
         </button>
 
-        <div style={{ textAlign: 'center', marginTop: '15px' }}>
+        <div style={{ textAlign: 'center', marginTop: '25px' }}>
+          <span style={{ color: '#888', fontSize: '14px' }}>
+            {modoLogin ? 'Ainda não é membro? ' : 'Já tem uma conta? '}
+          </span>
           <button 
             type="button" 
             onClick={() => { setModoLogin(!modoLogin); setErro(''); setSucesso(''); }}
             className="tv-focusable"
-            style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer', textDecoration: 'underline' }}
+            style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', padding: '5px' }}
           >
-            {modoLogin ? 'Não tem conta? Registe-se' : 'Já tem conta? Faça Login'}
+            {modoLogin ? 'Registe-se agora' : 'Inicie Sessão'}
           </button>
         </div>
       </form>
