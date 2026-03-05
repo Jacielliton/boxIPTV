@@ -24,8 +24,8 @@ export default function Login({ onLogin }) {
     setCarregando(true);
 
     try {
-      // Os caminhos relativos puros ('/api/...') garantem que o mudar_ambiente.py funciona perfeitamente!
-      const url = modoLogin ? '/api/login' : '/api/register';
+      // Os caminhos relativos puros ('http://localhost:8006/api/...') garantem que o mudar_ambiente.py funciona perfeitamente!
+      const url = modoLogin ? 'http://localhost:8006/api/login' : 'http://localhost:8006/api/register';
       
       const response = await fetch(url, {
         method: 'POST',

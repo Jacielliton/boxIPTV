@@ -23,6 +23,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
   const [carregandoDetalhes, setCarregandoDetalhes] = useState(false);
   const [temporadaSelecionada, setTemporadaSelecionada] = useState(null);
 
+  // Estados de Histórico, Minha Lista e Progressos
   const [historico, setHistorico] = useState(() => {
     try {
       const salvo = localStorage.getItem(`boxiptv_hist_${sessaoUsuario?.username}`);
@@ -75,38 +76,74 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
   };
 
-  // Busca de Conteúdo e Categorias Diretamente do IPTV
+  // ==========================================
+  // 1º PASSO: CARREGAR AS CATEGORIAS E SELECIONAR A PRIMEIRA
+  // ==========================================
   useEffect(() => {
     if (!playlistAtiva) return;
     setCarregando(true);
-    setCategoriaSelecionada('');
     
-    const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
     const actionCat = tipoAtual === 'filmes' ? 'get_vod_categories' : (tipoAtual === 'series' ? 'get_series_categories' : 'get_live_categories');
     
-    Promise.all([
-      fetch(getIptvUrl(actionStream)).then(res => res.json()),
-      fetch(getIptvUrl(actionCat)).then(res => res.json())
-    ]).then(([dCont, dCat]) => {
-      setConteudo(Array.isArray(dCont) ? dCont : []);
-      
-      // Ordenação Alfabética A-Z no Frontend
-      let cats = Array.isArray(dCat) ? dCat : [];
-      cats.sort((a, b) => (a.category_name || '').trim().localeCompare((b.category_name || '').trim(), 'pt-BR', {sensitivity: 'base'}));
-      setCategorias(cats);
-      
-      setCarregando(false);
-      setLimite(50);
-    }).catch(() => { 
-      setConteudo([]); setCategorias([]); setCarregando(false); 
-      alert("Falha ao conectar ao servidor IPTV. Verifique a internet ou dados da lista.");
-    });
+    fetch(getIptvUrl(actionCat))
+      .then(res => res.json())
+      .then(dCat => {
+        let cats = Array.isArray(dCat) ? dCat : [];
+        cats.sort((a, b) => (a.category_name || '').trim().localeCompare((b.category_name || '').trim(), 'pt-BR', {sensitivity: 'base'}));
+        setCategorias(cats);
+        
+        if (cats.length > 0) {
+            setCategoriaSelecionada(cats[0].category_id); // Escolhe a primeira categoria automaticamente!
+        } else {
+            setCarregando(false);
+        }
+      }).catch(() => { 
+        setCategorias([]); 
+        setCarregando(false); 
+        alert("Erro ao carregar categorias. Verifique a sua ligação ou os dados do servidor."); 
+      });
   }, [tipoAtual, playlistAtiva]);
 
+  // ==========================================
+  // 2º PASSO: CARREGAR CONTEÚDO APENAS DA CATEGORIA SELECIONADA
+  // ==========================================
+  useEffect(() => {
+    if (!playlistAtiva || !categoriaSelecionada) return;
+
+    // Se estiver na aba Recentes ou Minha Lista, não precisa buscar no servidor
+    if (categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') {
+        setCarregando(false);
+        return;
+    }
+
+    setCarregando(true);
+    setConteudo([]); // Limpa a tela para mostrar que está a carregar
+    
+    const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
+    
+    // Pede apenas os filmes da categoria selecionada para ser ultra-rápido
+    fetch(getIptvUrl(actionStream, `&category_id=${categoriaSelecionada}`))
+      .then(res => res.json())
+      .then(dCont => {
+        setConteudo(Array.isArray(dCont) ? dCont : []);
+        setLimite(50);
+        setCarregando(false);
+      }).catch(() => { 
+        setConteudo([]); 
+        setCarregando(false); 
+      });
+  }, [categoriaSelecionada, tipoAtual, playlistAtiva]);
+
+  // ==========================================
+  // FUNÇÕES DE LISTAS E HISTÓRICO
+  // ==========================================
   const registrarHistorico = (itemOriginal, tipo) => {
     setHistorico(prev => {
       const idUnico = itemOriginal.stream_id || itemOriginal.series_id;
-      const novaLista = [ { ...itemOriginal, tipo_salvo: tipo }, ...prev.filter(i => (i.stream_id || i.series_id) !== idUnico) ].slice(0, 30);
+      const novaLista = [
+        { ...itemOriginal, tipo_salvo: tipo },
+        ...prev.filter(i => (i.stream_id || i.series_id) !== idUnico)
+      ].slice(0, 30);
       localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
       return novaLista;
     });
@@ -168,6 +205,9 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     }
   };
 
+  // ==========================================
+  // FILTRAGEM INTELIGENTE
+  // ==========================================
   let conteudoFiltrado = [];
   if (categoriaSelecionada === 'recentes') {
     conteudoFiltrado = historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase())));
@@ -175,13 +215,13 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     conteudoFiltrado = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase())));
   } else {
     conteudoFiltrado = conteudo.filter(item => {
-      const matchesBusca = !busca || item.name.toLowerCase().includes(busca.toLowerCase());
-      const matchesCat = !categoriaSelecionada || String(item.category_id) === String(categoriaSelecionada);
-      return matchesBusca && matchesCat;
+      return !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()));
     });
   }
 
-  // Abrir Detalhes Direto do IPTV
+  // ==========================================
+  // ABRIR DETALHES
+  // ==========================================
   const abrirDetalhes = (item) => {
     registrarHistorico(item, tipoAtual);
     setItemDetalhes(item);
@@ -209,6 +249,9 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
       .catch(() => setCarregandoDetalhes(false));
   };
 
+  // ==========================================
+  // REPRODUÇÃO (PLAYER)
+  // ==========================================
   const handlePlay = (id, extensao = 'mp4', isSeries = false, inicio = 0) => {
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
@@ -239,19 +282,14 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
     setItemSelecionado(null);
   };
 
-  const formatarTempo = (segundos) => {
-    if (!segundos) return '';
-    const m = Math.floor(segundos / 60);
-    const s = Math.floor(segundos % 60);
-    return `${m}m ${s}s`;
-  };
-
   const itemEstaNaLista = itemDetalhes && minhaLista.some(i => (i.stream_id || i.series_id) === (itemDetalhes.stream_id || itemDetalhes.series_id));
 
   if (mostrarAdmin) return <AdminPanel token={sessaoUsuario.token} onVoltar={() => setMostrarAdmin(false)} />;
 
   return (
     <div style={{ paddingBottom: '70px', backgroundColor: '#141414', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' }}>
+      
+      {/* OCULTAR SCROLLBARS E ESTILOS DO MODAL */}
       <style>{`
         .hide-scroll::-webkit-scrollbar { display: none; }
         .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
@@ -269,12 +307,13 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
       {itemSelecionado && <Player channel={itemSelecionado} onClose={handleClosePlayer} startTime={itemSelecionado.startTime || 0} />}
       {menuAberto && <div onClick={() => setMenuAberto(false)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', zIndex: 55, background: 'transparent' }}></div>}
 
+      {/* HEADER FIXO: PESQUISA E PERFIL */}
       <div style={{ padding: '15px', backgroundColor: 'rgba(20,20,20,0.95)', position: 'sticky', top: 0, zIndex: 50, backdropFilter: 'blur(10px)' }}>
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center', marginBottom: '15px' }}>
           <div style={{ position: 'relative', flex: 1 }}>
             <Search size={18} style={{ position: 'absolute', left: '15px', top: '12px', color: '#888' }} />
             <input 
-              type="text" placeholder={`Pesquisar ${tipoAtual.replace('-', ' ')}...`} value={busca} onChange={(e) => setBusca(e.target.value)}
+              type="text" placeholder={`Pesquisar na categoria...`} value={busca} onChange={(e) => setBusca(e.target.value)}
               style={{ width: '100%', padding: '10px 15px 10px 40px', borderRadius: '25px', border: '1px solid #333', backgroundColor: '#1a1a1a', color: 'white', outline: 'none', boxSizing: 'border-box', fontSize: '14px' }}
             />
           </div>
@@ -283,6 +322,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
           </button>
         </div>
 
+        {/* BARRA DE CATEGORIAS DESLIZANTE HORIZONTAL */}
         <div className="hide-scroll" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '5px' }}>
           <button onClick={() => {setCategoriaSelecionada('minha-lista'); setLimite(50);}} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === 'minha-lista' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === 'minha-lista' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === 'minha-lista' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
             <Bookmark size={14} /> Minha Lista
@@ -290,9 +330,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
           <button onClick={() => {setCategoriaSelecionada('recentes'); setLimite(50);}} style={{ display: 'flex', alignItems: 'center', gap: '5px', padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === 'recentes' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === 'recentes' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === 'recentes' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
             <Clock size={14} /> Recentes
           </button>
-          <button onClick={() => {setCategoriaSelecionada(''); setLimite(50);}} style={{ padding: '6px 15px', borderRadius: '20px', border: categoriaSelecionada === '' ? 'none' : '1px solid #444', backgroundColor: categoriaSelecionada === '' ? '#e50914' : '#1a1a1a', color: categoriaSelecionada === '' ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
-            Todas
-          </button>
+          
           {categorias.map(cat => (
             <button key={cat.category_id} onClick={() => {setCategoriaSelecionada(cat.category_id); setLimite(50);}} style={{ padding: '6px 15px', borderRadius: '20px', border: String(categoriaSelecionada) === String(cat.category_id) ? 'none' : '1px solid #444', backgroundColor: String(categoriaSelecionada) === String(cat.category_id) ? '#e50914' : '#1a1a1a', color: String(categoriaSelecionada) === String(cat.category_id) ? '#fff' : '#aaa', fontSize: '13px', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
               {cat.category_name}
@@ -301,6 +339,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
         </div>
       </div>
 
+      {/* MENU DO UTILIZADOR */}
       {menuAberto && (
         <div style={{ position: 'fixed', top: '70px', right: '15px', backgroundColor: '#222', borderRadius: '12px', padding: '10px', zIndex: 60, boxShadow: '0 10px 30px rgba(0,0,0,0.9)', display: 'flex', flexDirection: 'column', minWidth: '180px', border: '1px solid #333' }}>
           <div style={{ padding: '10px', borderBottom: '1px solid #333', marginBottom: '5px', fontSize: '14px' }}>
@@ -314,7 +353,10 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
         </div>
       )}
 
+      {/* GRELHA DE CONTEÚDO */}
       <div style={{ padding: '10px 15px' }}>
+        
+        {/* BOTÃO DE LIMPAR LISTA/HISTÓRICO */}
         {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && conteudoFiltrado.length > 0 && !carregando && (
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
                 <button
@@ -334,6 +376,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                 {conteudoFiltrado.slice(0, limite).map((item, index) => (
                 <div key={item.stream_id || item.series_id || index} onClick={() => abrirDetalhes(item)} style={{ backgroundColor: '#1a1a1a', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
                     
+                    {/* BOTÃO REMOVER INDIVIDUAL (Mobile) */}
                     {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
                         <button
                             onClick={(e) => categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e)}
@@ -343,8 +386,10 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                         </button>
                     )}
 
+                    {/* Imagem da Capa */}
                     <img src={item.stream_icon || item.cover || CAPA_PADRAO} alt={item.name} loading="lazy" onError={(e) => { e.target.src = CAPA_PADRAO; }} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '90px' : '150px', objectFit: 'cover', backgroundColor: '#000' }} />
                     
+                    {/* Selo de Nota (Rating) */}
                     {item.rating && item.rating !== "0" && item.rating !== 0 && (
                         <div style={{ position: 'absolute', top: '5px', right: '5px', backgroundColor: 'rgba(0,0,0,0.7)', color: '#f5c518', padding: '3px 7px', borderRadius: '12px', fontSize: '11px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '3px', backdropFilter: 'blur(3px)' }}>
                             <Star size={12} fill="#f5c518" /> {parseFloat(item.rating).toFixed(1)}
@@ -364,15 +409,18 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
             )}
           </>
         ) : (
-          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#666' }}>Nenhum conteúdo encontrado.</div>
+          <div style={{ textAlign: 'center', padding: '60px 20px', color: '#666' }}>Nenhum conteúdo encontrado nesta categoria.</div>
         )}
       </div>
 
+      {/* MODAL PREMIUN DE DETALHES (BOTTOM SHEET - ESTILO NETFLIX) */}
       {itemDetalhes && (
         <>
           <div onClick={() => setItemDetalhes(null)} style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(0,0,0,0.85)', zIndex: 999, animation: 'fadeIn 0.3s' }}></div>
           
           <div className="bottom-sheet">
+            
+            {/* CABEÇALHO DO MODAL COM IMAGEM BANNER */}
             <div style={{ position: 'relative', width: '100%', height: '35vh', minHeight: '220px', backgroundColor: '#000', flexShrink: 0 }}>
               <img 
                 src={dadosDetalhes?.info?.movie_image || dadosDetalhes?.info?.cover || itemDetalhes.stream_icon || itemDetalhes.cover || CAPA_PADRAO} 
@@ -380,14 +428,20 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                 onError={(e) => e.target.src = CAPA_PADRAO} 
                 style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.6 }} 
               />
+              
               <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '150px', background: 'linear-gradient(to top, #141414 0%, transparent 100%)' }}></div>
+              
               <button onClick={() => setItemDetalhes(null)} style={{ position: 'absolute', top: '20px', right: '20px', background: 'rgba(0,0,0,0.6)', border: 'none', color: 'white', borderRadius: '50%', width: '38px', height: '38px', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(5px)' }}>
                 <X size={20} />
               </button>
             </div>
 
+            {/* CORPO DO MODAL (Com scroll nativo) */}
             <div className="hide-scroll" style={{ flex: 1, overflowY: 'auto', padding: '0 20px 30px 20px', position: 'relative', marginTop: '-60px', zIndex: 10 }}>
-              <h2 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: '900', textShadow: '0 2px 8px rgba(0,0,0,0.9)', lineHeight: '1.2' }}>{itemDetalhes.name}</h2>
+              
+              <h2 style={{ margin: '0 0 12px 0', fontSize: '28px', fontWeight: '900', textShadow: '0 2px 8px rgba(0,0,0,0.9)', lineHeight: '1.2' }}>
+                {itemDetalhes.name}
+              </h2>
 
               {carregandoDetalhes ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#aaa', marginTop: '20px' }}>
@@ -406,7 +460,11 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                     {dadosDetalhes?.info?.genre && <span style={{ background: '#333', padding: '3px 10px', borderRadius: '4px', fontSize: '11px', color: '#fff' }}>{dadosDetalhes.info.genre}</span>}
                   </div>
 
+                  {/* ========================================== */}
+                  {/* ÁREA DE BOTÕES (PLAY / CONTINUAR / FAVORITAR) */}
+                  {/* ========================================== */}
                   <div style={{ display: 'flex', gap: '10px', marginBottom: '25px' }}>
+                    
                     {tipoAtual === 'filmes' && dadosDetalhes?.movie_data && (
                       (() => {
                         const idFilme = dadosDetalhes.movie_data.stream_id;
@@ -439,6 +497,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                       </button>
                     )}
 
+                    {/* Botão de Favoritar (Lista) */}
                     <button onClick={() => toggleMinhaLista(itemDetalhes)} style={{ width: '50px', flexShrink: 0, backgroundColor: itemEstaNaLista ? '#1a1a1a' : '#333', color: itemEstaNaLista ? '#aaa' : '#fff', border: `1px solid ${itemEstaNaLista ? '#333' : '#444'}`, borderRadius: '8px', display: 'flex', justifyContent: 'center', alignItems: 'center', transition: '0.2s' }}>
                       {itemEstaNaLista ? <Check size={22} /> : <Bookmark size={22} />}
                     </button>
@@ -448,9 +507,12 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                     {dadosDetalhes?.info?.plot || "Nenhuma sinopse disponível para este conteúdo."}
                   </p>
 
+                  {/* DESIGN ESPECIAL PARA SÉRIES (Temporadas e Episódios Limpos) */}
                   {tipoAtual === 'series' && dadosDetalhes?.episodes && (
                     <div>
                       <h3 style={{ fontSize: '18px', marginBottom: '15px', color: '#fff', fontWeight: 'bold' }}>Episódios</h3>
+                      
+                      {/* Abas Horizontais para Escolher a Temporada */}
                       <div className="hide-scroll" style={{ display: 'flex', gap: '10px', overflowX: 'auto', marginBottom: '20px', paddingBottom: '10px' }}>
                         {Object.keys(dadosDetalhes.episodes).map(temp => (
                           <button 
@@ -468,18 +530,26 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                         ))}
                       </div>
 
+                      {/* Lista Vertical de Episódios */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {dadosDetalhes.episodes[temporadaSelecionada]?.map((ep) => {
                           const tempoEp = progressos[ep.id] || 0;
                           return (
                             <div key={ep.id} onClick={() => handlePlay(ep.id, ep.container_extension, true, tempoEp > 15 ? tempoEp : 0)} style={{ display: 'flex', gap: '15px', padding: '10px', backgroundColor: '#1a1a1a', borderRadius: '12px', alignItems: 'center', cursor: 'pointer', border: '1px solid #2a2a2a' }}>
+                              
                               <div style={{ position: 'relative', width: '130px', height: '75px', flexShrink: 0 }}>
                                 <img src={ep.info?.movie_image || ep.info?.cover || CAPA_PADRAO} alt={ep.title} onError={e=>e.target.src=CAPA_PADRAO} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
-                                {tempoEp > 15 && <div style={{ position: 'absolute', bottom: 0, left: 0, height: '4px', backgroundColor: '#e50914', width: '60%', borderBottomLeftRadius: '8px' }}></div>}
+                                
+                                {/* Mostrar a barra vermelha de progresso no episódio */}
+                                {tempoEp > 15 && (
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, height: '4px', backgroundColor: '#e50914', width: '60%', borderBottomLeftRadius: '8px' }}></div>
+                                )}
+
                                 <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', background: 'rgba(0,0,0,0.6)', borderRadius: '50%', padding: '8px', display: 'flex', backdropFilter: 'blur(2px)' }}>
                                   <Play size={16} color="white" fill="white" />
                                 </div>
                               </div>
+                              
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <div style={{ fontWeight: 'bold', fontSize: '14px', marginBottom: '4px', color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                   {ep.episode_num}. {ep.title || `Episódio ${ep.episode_num}`}
@@ -488,6 +558,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
                                   {tempoEp > 15 ? <span style={{color: '#e50914', fontWeight: 'bold'}}>Continuar assistindo...</span> : (ep.info?.plot || 'Toque para assistir agora.')}
                                 </div>
                               </div>
+                              
                             </div>
                           );
                         })}
@@ -501,6 +572,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
         </>
       )}
 
+      {/* BOTTOM NAV BAR */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', backgroundColor: 'rgba(20, 20, 20, 0.98)', backdropFilter: 'blur(15px)', display: 'flex', justifyContent: 'space-around', padding: '10px 0', borderTop: '1px solid #2a2a2a', zIndex: 100 }}>
         <button onClick={() => { setTipoAtual('filmes'); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'filmes' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
           <Film size={22} color={tipoAtual === 'filmes' ? '#e50914' : 'currentColor'} /> <span style={{ fontSize: '11px', fontWeight: tipoAtual === 'filmes' ? 'bold' : 'normal' }}>Filmes</span>
@@ -512,6 +584,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
           <Radio size={22} color={tipoAtual === 'ao-vivo' ? '#e50914' : 'currentColor'} /> <span style={{ fontSize: '11px', fontWeight: tipoAtual === 'ao-vivo' ? 'bold' : 'normal' }}>TV</span>
         </button>
       </div>
+
     </div>
   );
 }

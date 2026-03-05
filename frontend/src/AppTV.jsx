@@ -28,132 +28,11 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   
   const dragRef = useRef({ isDown: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0, dragged: false });
   const categoriasScrollRef = useRef(null); 
-
   const [indiceDestaque, setIndiceDestaque] = useState(0);
 
-  const [historico, setHistorico] = useState(() => {
-    if (sessaoUsuario) {
-      try {
-        const salvo = localStorage.getItem(`boxiptv_hist_${sessaoUsuario.username}`);
-        const parsed = salvo ? JSON.parse(salvo) : [];
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (e) { return []; }
-    }
-    return [];
-  });
-
-  const [minhaLista, setMinhaLista] = useState(() => {
-    if (sessaoUsuario) {
-      try {
-        const salvo = localStorage.getItem(`boxiptv_lista_${sessaoUsuario.username}`);
-        const parsed = salvo ? JSON.parse(salvo) : [];
-        return Array.isArray(parsed) ? parsed : [];
-      } catch (e) { return []; }
-    }
-    return [];
-  });
-
-  const [progressos, setProgressos] = useState(() => {
-    if (sessaoUsuario) {
-      try {
-        const salvo = localStorage.getItem(`boxiptv_progresso_${sessaoUsuario.username}`);
-        const parsed = salvo ? JSON.parse(salvo) : {};
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-      } catch (e) { return {}; }
-    }
-    return {};
-  });
-
-  const handleImageError = (e, fallback) => {
-    if (e.target.src !== fallback) {
-      e.target.onerror = null; 
-      e.target.src = fallback;
-    }
-  };
-
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-      if (!arrowKeys.includes(e.key)) return;
-
-      const currentFocus = document.activeElement;
-      if (currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
-
-      const focusables = Array.from(document.querySelectorAll('.tv-focusable')).filter(el => {
-        const rect = el.getBoundingClientRect();
-        return rect.width > 0 && rect.height > 0 && getComputedStyle(el).opacity !== '0';
-      });
-
-      if (!focusables.includes(currentFocus)) {
-        if (focusables.length > 0) focusables[0].focus();
-        e.preventDefault();
-        return;
-      }
-
-      e.preventDefault();
-      const currentRect = currentFocus.getBoundingClientRect();
-      let bestNext = null;
-      let minDistance = Infinity;
-
-      focusables.forEach(candidate => {
-        if (candidate === currentFocus) return;
-        const candidateRect = candidate.getBoundingClientRect();
-
-        let isDirectionMatch = false;
-        let primaryDistance = 0;
-        let orthogonalDistance = 0;
-        const tolerance = 20;
-
-        if (e.key === 'ArrowUp') {
-          isDirectionMatch = candidateRect.bottom <= currentRect.top + tolerance;
-          primaryDistance = currentRect.top - candidateRect.bottom;
-          orthogonalDistance = Math.max(0, Math.max(candidateRect.left - currentRect.right, currentRect.left - candidateRect.right));
-        } else if (e.key === 'ArrowDown') {
-          isDirectionMatch = candidateRect.top >= currentRect.bottom - tolerance;
-          primaryDistance = candidateRect.top - currentRect.bottom;
-          orthogonalDistance = Math.max(0, Math.max(candidateRect.left - currentRect.right, currentRect.left - candidateRect.right));
-        } else if (e.key === 'ArrowLeft') {
-          isDirectionMatch = candidateRect.right <= currentRect.left + tolerance;
-          primaryDistance = currentRect.left - candidateRect.right;
-          orthogonalDistance = Math.max(0, Math.max(candidateRect.top - currentRect.bottom, currentRect.top - candidateRect.bottom));
-        } else if (e.key === 'ArrowRight') {
-          isDirectionMatch = candidateRect.left >= currentRect.right - tolerance;
-          primaryDistance = candidateRect.left - currentRect.right;
-          orthogonalDistance = Math.max(0, Math.max(candidateRect.top - currentRect.bottom, currentRect.top - candidateRect.bottom));
-        }
-
-        if (isDirectionMatch) {
-          if (primaryDistance < 0) primaryDistance = 0;
-          const edgeDistance = Math.sqrt(Math.pow(primaryDistance, 2) + Math.pow(orthogonalDistance, 2));
-          const weightedDistance = edgeDistance + (orthogonalDistance * 5); 
-
-          if (weightedDistance < minDistance) {
-            minDistance = weightedDistance;
-            bestNext = candidate;
-          }
-        }
-      });
-
-      if (bestNext) {
-        bestNext.focus({ preventScroll: true });
-        if (bestNext.closest('.conteudo-container')) {
-          bestNext.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
-        } else if (categoriasScrollRef.current && categoriasScrollRef.current.contains(bestNext)) {
-          const container = categoriasScrollRef.current;
-          container.scrollTo({
-            top: bestNext.offsetTop - (container.clientHeight / 2) + (bestNext.clientHeight / 2),
-            behavior: 'smooth'
-          });
-        } else if (!bestNext.closest('.sidebar-container')) {
-          bestNext.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
-        }
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
+  // ==========================================
+  // FUNÇÃO CORRIGIDA E RESTAURADA AQUI
+  // ==========================================
   const fecharDetalhes = () => {
     setSerieDetalhes(null);
     setFilmeDetalhes(null);
@@ -161,189 +40,101 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setItemAtualDetalhes(null);
   };
 
-  const registrarHistorico = (itemOriginal, tipo) => {
-    setHistorico(prevHistorico => {
-      const idUnico = itemOriginal.stream_id || itemOriginal.series_id;
-      const seguro = Array.isArray(prevHistorico) ? prevHistorico : [];
-      const novaLista = [ { ...itemOriginal, tipo_salvo: tipo }, ...seguro.filter(i => (i.stream_id || i.series_id) !== idUnico) ].slice(0, 30);
-      localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
-      return novaLista;
-    });
-  };
+  const [historico, setHistorico] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`boxiptv_hist_${sessaoUsuario.username}`)) || []; } catch (e) { return []; }
+  });
 
-  const removerDoHistorico = (itemParaRemover, e) => {
-    if (e) { e.stopPropagation(); e.preventDefault(); }
-    setHistorico(prevHistorico => {
-      const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
-      const novaLista = prevHistorico.filter(i => (i.stream_id || i.series_id) !== idUnico);
-      localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
-      return novaLista;
-    });
-  };
+  const [minhaLista, setMinhaLista] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`boxiptv_lista_${sessaoUsuario.username}`)) || []; } catch (e) { return []; }
+  });
 
-  const limparTodoHistorico = () => {
-    if (window.confirm(`Deseja limpar todo o histórico de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) {
-      setHistorico(prevHistorico => {
-        const novaLista = prevHistorico.filter(i => i.tipo_salvo !== tipoAtual);
-        localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista));
-        return novaLista;
-      });
-    }
-  };
+  const [progressos, setProgressos] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`boxiptv_progresso_${sessaoUsuario.username}`)) || {}; } catch (e) { return {}; }
+  });
 
-  const removerDaMinhaLista = (itemParaRemover, e) => {
-    if (e) { e.stopPropagation(); e.preventDefault(); }
-    setMinhaLista(prevLista => {
-      const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id;
-      const novaLista = prevLista.filter(i => (i.stream_id || i.series_id) !== idUnico);
-      localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
-      return novaLista;
-    });
-  };
-
-  const limparTodaMinhaLista = () => {
-    if (window.confirm(`Deseja limpar toda a sua lista de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) {
-      setMinhaLista(prevLista => {
-        const novaLista = prevLista.filter(i => i.tipo_salvo !== tipoAtual);
-        localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
-        return novaLista;
-      });
-    }
-  };
-
-  const toggleMinhaLista = (item) => {
-    if (!item) return;
-    setMinhaLista(prevLista => {
-      const idUnico = item.stream_id || item.series_id;
-      const seguro = Array.isArray(prevLista) ? prevLista : [];
-      const jaExiste = seguro.find(i => (i.stream_id || i.series_id) === idUnico);
-      let novaLista;
-      if (jaExiste) {
-        novaLista = seguro.filter(i => (i.stream_id || i.series_id) !== idUnico);
-      } else {
-        novaLista = [{ ...item, tipo_salvo: tipoAtual }, ...seguro];
-      }
-      localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista));
-      return novaLista;
-    });
-  };
-
-  const handleClosePlayer = (tempoAtual, duracao) => {
-    if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { 
-      const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0;
-      let novosProgressos = { ...progressos };
-      if (percentagemVista > 0.95) {
-        delete novosProgressos[itemSelecionado.id];
-      } else {
-        novosProgressos[itemSelecionado.id] = tempoAtual;
-      }
-      setProgressos(novosProgressos);
-      localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos));
-    }
-    setItemSelecionado(null);
-    setTimeout(() => {
-        const elementos = document.querySelectorAll('.tv-focusable');
-        if(elementos.length > 0) elementos[0].focus();
-    }, 100);
-  };
-
-  const formatarTempo = (segundos) => {
-    if (!segundos) return '';
-    const m = Math.floor(segundos / 60);
-    const s = Math.floor(segundos % 60);
-    return `${m}m ${s}s`;
-  };
-
-  // ==========================================
-  // MÁGICA DO CLIENT-SIDE: URL Builder Direto
-  // ==========================================
   const getIptvUrl = (action, extraParams = '') => {
     let baseUrl = playlistAtiva.server_url.trim();
-    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) baseUrl = "http://" + baseUrl;
-    baseUrl = baseUrl.replace(/\/$/, "");
-    if (baseUrl.endsWith("player_api.php")) baseUrl = baseUrl.replace("/player_api.php", "");
+    if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
+    baseUrl = baseUrl.replace(/\/$/, "").replace("/player_api.php", "");
     return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
   };
 
+  // ==========================================
+  // 1º PASSO: CARREGAR AS CATEGORIAS E SELECIONAR A PRIMEIRA
+  // ==========================================
   useEffect(() => {
     if (!playlistAtiva) return;
     setCarregando(true);
-    fecharDetalhes();
-    setLimite(50);
-    setCategoriaSelecionada(''); 
     
-    const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
     const actionCat = tipoAtual === 'filmes' ? 'get_vod_categories' : (tipoAtual === 'series' ? 'get_series_categories' : 'get_live_categories');
     
-    Promise.all([
-      fetch(getIptvUrl(actionStream)).then(res => res.json()),
-      fetch(getIptvUrl(actionCat)).then(res => res.json())
-    ]).then(([dCont, dCat]) => {
-      setConteudo(Array.isArray(dCont) ? dCont : []);
-      
-      // Ordenação Alfabética A-Z no Frontend
-      let cats = Array.isArray(dCat) ? dCat : [];
-      cats.sort((a, b) => (a.category_name || '').trim().localeCompare((b.category_name || '').trim(), 'pt-BR', {sensitivity: 'base'}));
-      setCategorias(cats);
-      
-      setCarregando(false);
-      setIndiceDestaque(0); 
-    }).catch(err => {
-      setConteudo([]); setCategorias([]); setCarregando(false);
-      alert("Falha ao conectar ao servidor IPTV. Verifique a internet ou dados da lista.");
-    });
+    fetch(getIptvUrl(actionCat))
+      .then(res => res.json())
+      .then(dCat => {
+        let cats = Array.isArray(dCat) ? dCat : [];
+        cats.sort((a, b) => (a.category_name || '').trim().localeCompare((b.category_name || '').trim(), 'pt-BR', {sensitivity: 'base'}));
+        setCategorias(cats);
+        
+        if (cats.length > 0) {
+            setCategoriaSelecionada(cats[0].category_id);
+        } else {
+            setCarregando(false);
+        }
+      }).catch(err => { setCategorias([]); setCarregando(false); });
   }, [tipoAtual, playlistAtiva]);
 
-  let conteudoParaExibir = [];
-  const historicoSeguro = Array.isArray(historico) ? historico : [];
-  const minhaListaSegura = Array.isArray(minhaLista) ? minhaLista : [];
-  const conteudoSeguro = Array.isArray(conteudo) ? conteudo : [];
+  // ==========================================
+  // 2º PASSO: CARREGAR CONTEÚDO APENAS DA CATEGORIA SELECIONADA
+  // ==========================================
+  useEffect(() => {
+    if (!playlistAtiva || !categoriaSelecionada) return;
 
+    if (categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') {
+        setCarregando(false);
+        return;
+    }
+
+    setCarregando(true);
+    fecharDetalhes();
+    setLimite(50);
+    setConteudo([]); // Limpa a UI para novo load
+    
+    const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
+    
+    fetch(getIptvUrl(actionStream, `&category_id=${categoriaSelecionada}`))
+      .then(res => res.json())
+      .then(dCont => {
+        setConteudo(Array.isArray(dCont) ? dCont : []);
+        setCarregando(false);
+        setIndiceDestaque(0); 
+      }).catch(err => { setConteudo([]); setCarregando(false); });
+  }, [categoriaSelecionada, tipoAtual, playlistAtiva]);
+
+  let conteudoParaExibir = [];
   if (categoriaSelecionada === 'recentes') {
-    conteudoParaExibir = historicoSeguro.filter(item => item && item.tipo_salvo === tipoAtual && item.name && item.name.toLowerCase().includes(busca.toLowerCase())).slice(0, limite);
+    conteudoParaExibir = historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
   } else if (categoriaSelecionada === 'minha-lista') {
-    conteudoParaExibir = minhaListaSegura.filter(item => item && item.tipo_salvo === tipoAtual && item.name && item.name.toLowerCase().includes(busca.toLowerCase())).slice(0, limite);
+    conteudoParaExibir = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
   } else {
-    conteudoParaExibir = conteudoSeguro.filter(item => {
-        if (!item) return false;
-        const passaBusca = item.name && item.name.toLowerCase().includes(busca.toLowerCase());
-        const passaCategoria = categoriaSelecionada === '' || String(item.category_id) === String(categoriaSelecionada);
-        return passaBusca && passaCategoria;
+    // API já filtrou por categoria. Falta apenas o filtro de texto local
+    conteudoParaExibir = conteudo.filter(item => {
+        return !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()));
     }).slice(0, limite);
   }
 
-  const modoCarrossel = categoriaSelecionada === '' && busca === '';
-  const conteudoAgrupado = {};
-  
-  if (modoCarrossel) {
-      conteudoSeguro.forEach(item => {
-          if (!item) return;
-          if (!conteudoAgrupado[item.category_id]) {
-              const cat = Array.isArray(categorias) ? categorias.find(c => String(c.category_id) === String(item.category_id)) : null;
-              conteudoAgrupado[item.category_id] = { nome: cat ? cat.category_name : 'Outros', itens: [] };
-          }
-          if (conteudoAgrupado[item.category_id].itens.length < 25) { 
-             conteudoAgrupado[item.category_id].itens.push(item);
-          }
-      });
+  // Banner Inteligente: Apenas exibe se for numa categoria e sem busca
+  const itensDestaqueRaw = conteudoParaExibir.length > 0 && busca === '' && categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' ? conteudoParaExibir.slice(0, 6) : [];
+  const paresDestaque = [];
+  for (let i = 0; i < itensDestaqueRaw.length; i += 2) {
+    if (itensDestaqueRaw[i + 1]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
+    else if (itensDestaqueRaw[i]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
   }
 
-  const itensDestaqueRaw = conteudoParaExibir.length > 0 && modoCarrossel ? conteudoParaExibir.slice(0, 6) : [];
-  const paresDestaque = [];
-  
-  for (let i = 0; i < itensDestaqueRaw.length; i += 2) {
-    if (itensDestaqueRaw[i + 1]) {
-      paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
-    } else if (itensDestaqueRaw[i]) {
-      paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
-    }
-  }
+  const itensGrid = paresDestaque.length > 0 ? conteudoParaExibir.slice(6) : conteudoParaExibir;
 
   useEffect(() => {
     if (paresDestaque.length <= 1) return;
-    const interval = setInterval(() => {
-      setIndiceDestaque(prev => (prev + 1) % paresDestaque.length);
-    }, 5000);
+    const interval = setInterval(() => setIndiceDestaque(prev => (prev + 1) % paresDestaque.length), 5000);
     return () => clearInterval(interval);
   }, [paresDestaque.length]);
 
@@ -355,121 +146,87 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleMouseDown = (e) => {
-    dragRef.current.isDown = true;
-    dragRef.current.dragged = false;
-    dragRef.current.startX = e.pageX - e.currentTarget.offsetLeft;
-    dragRef.current.startY = e.pageY - e.currentTarget.offsetTop;
-    dragRef.current.scrollLeft = e.currentTarget.scrollLeft;
-    dragRef.current.scrollTop = e.currentTarget.scrollTop;
-    e.currentTarget.style.cursor = 'grabbing';
-  };
-
-  const handleMouseLeave = (e) => {
-    dragRef.current.isDown = false;
-    e.currentTarget.style.cursor = 'grab';
-  };
-
-  const handleMouseUp = (e) => {
-    dragRef.current.isDown = false;
-    e.currentTarget.style.cursor = 'grab';
-  };
-
-  const handleMouseMove = (e) => {
-    if (!dragRef.current.isDown) return;
-    e.preventDefault();
-    const x = e.pageX - e.currentTarget.offsetLeft;
-    const y = e.pageY - e.currentTarget.offsetTop;
-    const walkX = (x - dragRef.current.startX) * 1.5; 
-    const walkY = (y - dragRef.current.startY) * 1.5; 
-    if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) dragRef.current.dragged = true; 
-    e.currentTarget.scrollLeft = dragRef.current.scrollLeft - walkX;
-    e.currentTarget.scrollTop = dragRef.current.scrollTop - walkY;
-  };
+  const handleMouseDown = (e) => { dragRef.current.isDown = true; dragRef.current.dragged = false; dragRef.current.startX = e.pageX - e.currentTarget.offsetLeft; dragRef.current.startY = e.pageY - e.currentTarget.offsetTop; dragRef.current.scrollLeft = e.currentTarget.scrollLeft; dragRef.current.scrollTop = e.currentTarget.scrollTop; e.currentTarget.style.cursor = 'grabbing'; };
+  const handleMouseLeave = (e) => { dragRef.current.isDown = false; e.currentTarget.style.cursor = 'grab'; };
+  const handleMouseUp = (e) => { dragRef.current.isDown = false; e.currentTarget.style.cursor = 'grab'; };
+  const handleMouseMove = (e) => { if (!dragRef.current.isDown) return; e.preventDefault(); const walkX = (e.pageX - e.currentTarget.offsetLeft - dragRef.current.startX) * 1.5; const walkY = (e.pageY - e.currentTarget.offsetTop - dragRef.current.startY) * 1.5; if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) dragRef.current.dragged = true; e.currentTarget.scrollLeft = dragRef.current.scrollLeft - walkX; e.currentTarget.scrollTop = dragRef.current.scrollTop - walkY; };
 
   // Abrir Detalhes Direto do IPTV
   const handleItemClick = (item) => {
     if (dragRef.current.dragged || !item) return;
-    registrarHistorico(item, tipoAtual);
-    setItemAtualDetalhes(item); 
-    setCarregando(true);
-
-    if (tipoAtual === 'filmes') {
-      fetch(getIptvUrl('get_vod_info', `&vod_id=${item.stream_id}`))
-        .then(res => res.json())
-        .then(data => {
-          setFilmeDetalhes(data);
-          setCarregando(false);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }).catch(err => { setCarregando(false); });
-
-    } else if (tipoAtual === 'ao-vivo') {
-      fetch(getIptvUrl('get_short_epg', `&stream_id=${item.stream_id}&limit=10`))
-        .then(res => res.json())
-        .then(data => {
-          setCanalDetalhes({ info: item, epg: Array.isArray(data?.epg_listings) ? data.epg_listings : [] });
-          setCarregando(false);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }).catch(err => {
-          setCanalDetalhes({ info: item, epg: [] }); 
-          setCarregando(false);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        });
-
-    } else {
-      fetch(getIptvUrl('get_series_info', `&series_id=${item.series_id}`))
-        .then(res => res.json())
-        .then(data => {
-          setSerieDetalhes(data);
-          if (data && data.episodes && typeof data.episodes === 'object' && Object.keys(data.episodes).length > 0) {
-            setTemporadaSelecionada(Object.keys(data.episodes)[0]);
-          }
-          setCarregando(false);
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }).catch(err => { setCarregando(false); });
-    }
+    registrarHistorico(item, tipoAtual); setItemAtualDetalhes(item); setCarregando(true);
+    let url = tipoAtual === 'filmes' ? getIptvUrl('get_vod_info', `&vod_id=${item.stream_id}`) : (tipoAtual === 'series' ? getIptvUrl('get_series_info', `&series_id=${item.series_id}`) : getIptvUrl('get_short_epg', `&stream_id=${item.stream_id}&limit=10`));
+    fetch(url).then(res => res.json()).then(data => {
+        if (tipoAtual === 'ao-vivo') setCanalDetalhes({ info: item, epg: Array.isArray(data?.epg_listings) ? data.epg_listings : [] });
+        else { if(tipoAtual === 'filmes') setFilmeDetalhes(data); else { setSerieDetalhes(data); if (data && data.episodes && Object.keys(data.episodes).length > 0) setTemporadaSelecionada(Object.keys(data.episodes)[0]); } }
+        setCarregando(false); window.scrollTo({ top: 0, behavior: 'smooth' });
+    }).catch(() => { setCarregando(false); });
   };
 
   const handlePlayFilme = (inicio = 0) => {
     if (!filmeDetalhes || !filmeDetalhes.movie_data) return;
-    const idFilme = filmeDetalhes.movie_data.stream_id;
-    const extensao = filmeDetalhes.movie_data.container_extension || 'mp4';
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    const streamUrl = `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${idFilme}.${extensao}`;
-    setItemSelecionado({ id: idFilme, nome: filmeDetalhes.info?.name || 'Filme', url: streamUrl, startTime: inicio });
+    setItemSelecionado({ id: filmeDetalhes.movie_data.stream_id, nome: filmeDetalhes.info?.name, url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.${filmeDetalhes.movie_data.container_extension || 'mp4'}`, startTime: inicio });
   };
 
-  const handlePlayEpisode = (episodio, inicio = 0) => {
-    if (!episodio) return;
-    const extensao = episodio.container_extension || 'mp4';
+  const handlePlayEpisode = (ep, inicio = 0) => {
+    if (!ep) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    const streamUrl = `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${episodio.id}.${extensao}`;
-    setItemSelecionado({
-      id: episodio.id,
-      nome: `${serieDetalhes?.info?.name || 'Série'} - S${temporadaSelecionada}E${episodio.episode_num} - ${episodio.title || ''}`,
-      url: streamUrl,
-      startTime: inicio
-    });
+    setItemSelecionado({ id: ep.id, nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, startTime: inicio });
   };
 
   const handlePlayCanal = () => {
     if (!canalDetalhes || !canalDetalhes.info) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    const streamUrl = `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`;
-    setItemSelecionado({ id: canalDetalhes.info.stream_id, nome: canalDetalhes.info.name, url: streamUrl, startTime: 0 });
+    setItemSelecionado({ id: canalDetalhes.info.stream_id, nome: canalDetalhes.info.name, url: `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`, startTime: 0 });
   };
 
-  const acionarComEnter = (e, acao) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      acao();
-    }
-  };
+  // ==========================================
+  // NAVEGAÇÃO ESPACIAL E AUXILIARES
+  // ==========================================
+  useEffect(() => {
+      const handleKeyDown = (e) => {
+        const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+        if (!arrowKeys.includes(e.key)) return;
+        const currentFocus = document.activeElement;
+        if (currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+        const focusables = Array.from(document.querySelectorAll('.tv-focusable')).filter(el => { const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && getComputedStyle(el).opacity !== '0'; });
+        if (!focusables.includes(currentFocus)) { if (focusables.length > 0) focusables[0].focus(); e.preventDefault(); return; }
+        e.preventDefault(); const currentRect = currentFocus.getBoundingClientRect(); let bestNext = null; let minDistance = Infinity;
+        focusables.forEach(candidate => {
+          if (candidate === currentFocus) return;
+          const candidateRect = candidate.getBoundingClientRect();
+          let isDirectionMatch = false; let primaryDistance = 0; let orthogonalDistance = 0; const tolerance = 20;
+          if (e.key === 'ArrowUp') { isDirectionMatch = candidateRect.bottom <= currentRect.top + tolerance; primaryDistance = currentRect.top - candidateRect.bottom; orthogonalDistance = Math.max(0, Math.max(candidateRect.left - currentRect.right, currentRect.left - candidateRect.right)); }
+          else if (e.key === 'ArrowDown') { isDirectionMatch = candidateRect.top >= currentRect.bottom - tolerance; primaryDistance = candidateRect.top - currentRect.bottom; orthogonalDistance = Math.max(0, Math.max(candidateRect.left - currentRect.right, currentRect.left - candidateRect.right)); }
+          else if (e.key === 'ArrowLeft') { isDirectionMatch = candidateRect.right <= currentRect.left + tolerance; primaryDistance = currentRect.left - candidateRect.right; orthogonalDistance = Math.max(0, Math.max(candidateRect.top - currentRect.bottom, currentRect.top - candidateRect.bottom)); }
+          else if (e.key === 'ArrowRight') { isDirectionMatch = candidateRect.left >= currentRect.right - tolerance; primaryDistance = candidateRect.left - currentRect.right; orthogonalDistance = Math.max(0, Math.max(candidateRect.top - currentRect.bottom, currentRect.top - candidateRect.bottom)); }
+          if (isDirectionMatch) { if (primaryDistance < 0) primaryDistance = 0; const edgeDistance = Math.sqrt(Math.pow(primaryDistance, 2) + Math.pow(orthogonalDistance, 2)); const weightedDistance = edgeDistance + (orthogonalDistance * 5); if (weightedDistance < minDistance) { minDistance = weightedDistance; bestNext = candidate; } }
+        });
+        if (bestNext) { bestNext.focus({ preventScroll: true }); if (bestNext.closest('.conteudo-container')) bestNext.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); else if (categoriasScrollRef.current && categoriasScrollRef.current.contains(bestNext)) { const container = categoriasScrollRef.current; container.scrollTo({ top: bestNext.offsetTop - (container.clientHeight / 2) + (bestNext.clientHeight / 2), behavior: 'smooth' }); } else if (!bestNext.closest('.sidebar-container')) bestNext.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }); }
+      };
+      window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
-  const itemEstaNaLista = itemAtualDetalhes && minhaListaSegura.some(i => (i.stream_id || i.series_id) === (itemAtualDetalhes.stream_id || itemAtualDetalhes.series_id));
+  const handleImageError = (e, fallback) => { if (e.target.src !== fallback) { e.target.onerror = null; e.target.src = fallback; } };
+  
+  const registrarHistorico = (itemOriginal, tipo) => { setHistorico(prev => { const idUnico = itemOriginal.stream_id || itemOriginal.series_id; const novaLista = [ { ...itemOriginal, tipo_salvo: tipo }, ...prev.filter(i => (i.stream_id || i.series_id) !== idUnico) ].slice(0, 30); localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); };
+  const removerDoHistorico = (itemParaRemover, e) => { if (e) { e.stopPropagation(); e.preventDefault(); } setHistorico(prev => { const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id; const novaLista = prev.filter(i => (i.stream_id || i.series_id) !== idUnico); localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); };
+  const limparTodoHistorico = () => { if (window.confirm(`Deseja limpar todo o histórico de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) { setHistorico(prev => { const novaLista = prev.filter(i => i.tipo_salvo !== tipoAtual); localStorage.setItem(`boxiptv_hist_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); } };
+  const removerDaMinhaLista = (itemParaRemover, e) => { if (e) { e.stopPropagation(); e.preventDefault(); } setMinhaLista(prev => { const idUnico = itemParaRemover.stream_id || itemParaRemover.series_id; const novaLista = prev.filter(i => (i.stream_id || i.series_id) !== idUnico); localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); };
+  const limparTodaMinhaLista = () => { if (window.confirm(`Deseja limpar toda a sua lista de ${tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV ao Vivo'}?`)) { setMinhaLista(prev => { const novaLista = prev.filter(i => i.tipo_salvo !== tipoAtual); localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); } };
+  
+  const toggleMinhaLista = (item) => { if (!item) return; setMinhaLista(prev => { const idUnico = item.stream_id || item.series_id; const jaExiste = prev.find(i => (i.stream_id || i.series_id) === idUnico); const novaLista = jaExiste ? prev.filter(i => (i.stream_id || i.series_id) !== idUnico) : [{ ...item, tipo_salvo: tipoAtual }, ...prev]; localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); };
+  
+  const handleClosePlayer = (tempoAtual, duracao) => { if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0; let novosProgressos = { ...progressos }; if (percentagemVista > 0.95) { delete novosProgressos[itemSelecionado.id]; } else { novosProgressos[itemSelecionado.id] = tempoAtual; } setProgressos(novosProgressos); localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos)); } setItemSelecionado(null); setTimeout(() => { const elementos = document.querySelectorAll('.tv-focusable'); if(elementos.length > 0) elementos[0].focus(); }, 100); };
+  
+  const formatarTempo = (segundos) => { if (!segundos) return ''; const m = Math.floor(segundos / 60); const s = Math.floor(segundos % 60); return `${m}m ${s}s`; };
+  const acionarComEnter = (e, acao) => { if (e.key === 'Enter') { e.preventDefault(); acao(); } };
+  
+  const itemEstaNaLista = itemAtualDetalhes && minhaLista.some(i => (i.stream_id || i.series_id) === (itemAtualDetalhes.stream_id || itemAtualDetalhes.series_id));
 
   if (mostrarAdmin) return <AdminPanel token={sessaoUsuario.token} onVoltar={() => setMostrarAdmin(false)} />;
 
@@ -488,13 +245,13 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 30px', backgroundColor: 'rgba(20, 20, 20, 0.95)', borderBottom: '1px solid #333', position: 'sticky', top: 0, zIndex: 100, width: '100%', boxSizing: 'border-box', marginBottom: '20px', borderRadius: '8px' }}>
         
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('filmes'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'filmes' ? '#e50914' : 'transparent', color: tipoAtual === 'filmes' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
+          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('filmes'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'filmes' ? '#e50914' : 'transparent', color: tipoAtual === 'filmes' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Film size={20} /> Filmes
           </button>
-          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('series'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'series' ? '#e50914' : 'transparent', color: tipoAtual === 'series' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
+          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('series'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'series' ? '#e50914' : 'transparent', color: tipoAtual === 'series' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Tv size={20} /> Séries
           </button>
-          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('ao-vivo'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'ao-vivo' ? '#e50914' : 'transparent', color: tipoAtual === 'ao-vivo' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
+          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('ao-vivo'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'ao-vivo' ? '#e50914' : 'transparent', color: tipoAtual === 'ao-vivo' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Radio size={20} /> TV ao Vivo
           </button>
         </div>
@@ -520,14 +277,14 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
         
-        <div style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>
+        <div className="sidebar-container" style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>
           <div style={{ marginBottom: '15px', position: 'relative' }}>
             <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
             <input 
               tabIndex={0} 
               className="tv-focusable" 
               type="text" 
-              placeholder={`Buscar ${tipoAtual.replace('-', ' ')}...`} 
+              placeholder={`Buscar na categoria...`} 
               value={busca} 
               onChange={(e) => { 
                 setBusca(e.target.value); 
@@ -545,15 +302,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
             </li>
             <li tabIndex={0} className="tv-focusable" onClick={() => handleCategoriaClick('recentes')} onKeyDown={(e) => acionarComEnter(e, () => handleCategoriaClick('recentes'))} style={{ display: 'flex', alignItems: 'center', padding: '12px 10px', cursor: 'pointer', borderRadius: '5px', marginBottom: '15px', fontSize: '14px', backgroundColor: categoriaSelecionada === 'recentes' ? '#e50914' : '#333', fontWeight: 'bold', color: '#fff', border: '1px solid #444' }}>
               <Clock size={16} style={{ marginRight: '8px' }} /> Assistidos Recentes
-            </li>
-            <li tabIndex={0} className="tv-focusable" onClick={() => {
-                handleCategoriaClick('');
-                if (categoriasScrollRef.current) categoriasScrollRef.current.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-              }} onKeyDown={(e) => acionarComEnter(e, () => {
-                handleCategoriaClick('');
-                if (categoriasScrollRef.current) categoriasScrollRef.current.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
-              })} style={{ display: 'flex', alignItems: 'center', padding: '12px 10px', cursor: 'pointer', borderRadius: '5px', marginBottom: '5px', fontSize: '14px', backgroundColor: categoriaSelecionada === '' ? '#e50914' : 'transparent', fontWeight: categoriaSelecionada === '' ? 'bold' : 'normal', color: '#fff' }}>
-              <LayoutGrid size={16} style={{ marginRight: '8px' }} /> Todas as Categorias
             </li>
           </ul>
 
@@ -697,7 +445,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                 </div>
               ) : (
                 <>
-                  {paresDestaque.length > 0 && modoCarrossel && (
+                  {paresDestaque.length > 0 && (
                     <div style={{ position: 'relative', width: '100%', height: '380px', marginBottom: '50px' }}>
                       {paresDestaque.map((par, idx) => (
                         <div 
@@ -742,91 +490,65 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                     </div>
                   )}
 
-                  {modoCarrossel ? (
-                        Object.values(conteudoAgrupado).filter(grupo => grupo && Array.isArray(grupo.itens) && grupo.itens.length > 0).map((grupo, idx) => (
-                            <div key={idx} style={{ marginBottom: '40px' }}>
-                            <h3 style={{ color: '#fff', marginBottom: '15px', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}><span style={{ width: '4px', height: '20px', backgroundColor: '#e50914', borderRadius: '2px' }}></span>{grupo.nome}</h3>
-                            <div onMouseDown={handleMouseDown} onMouseLeave={handleMouseLeave} onMouseUp={handleMouseUp} onMouseMove={handleMouseMove} style={{ display: 'flex', overflowX: 'auto', gap: '15px', paddingBottom: '15px', cursor: 'grab' }}>
-                                {(paresDestaque.length > 0 && idx === 0 ? grupo.itens.slice(paresDestaque.length * 2) : grupo.itens).map((item, index) => (
-                                <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
-                                    style={{ position: 'relative', flex: '0 0 auto', width: tipoAtual === 'ao-vivo' ? '250px' : '180px', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333', transition: 'transform 0.3s' }}>
-                                    
-                                    {item?.rating && item.rating !== "0" && item.rating !== 0 && (
-                                    <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
-                                        <Star size={12} fill="currentColor" /> {item.rating}
-                                    </div>
-                                    )}
-                                    
-                                    <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
-                                    <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
-                                </div>
-                                ))}
+                  {conteudoParaExibir.length === 0 ? (
+                    <p style={{ textAlign: 'center', color: '#aaa', marginTop: '50px' }}>Nenhum conteúdo encontrado nesta categoria.</p>
+                  ) : (
+                    <>
+                        {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && conteudoParaExibir.length > 0 && (
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
+                                <button
+                                    tabIndex={0}
+                                    className="tv-focusable"
+                                    onClick={categoriaSelecionada === 'recentes' ? limparTodoHistorico : limparTodaMinhaLista}
+                                    style={{ padding: '8px 15px', backgroundColor: '#333', color: '#fff', border: '1px solid #444', borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
+                                >
+                                    <Trash2 size={16} color="#ff4444" /> Limpar {categoriaSelecionada === 'recentes' ? 'Histórico' : 'Lista'}
+                                </button>
                             </div>
-                            </div>
-                        ))
-                        ) : (
-                        <>
-                            {conteudoParaExibir.length === 0 ? (
-                            <p style={{ textAlign: 'center', color: '#aaa', marginTop: '50px' }}>Nenhum conteúdo encontrado nesta vista.</p>
-                            ) : (
-                            <>
-                                {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && conteudoParaExibir.length > 0 && (
-                                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '15px' }}>
-                                        <button
-                                            tabIndex={0}
-                                            className="tv-focusable"
-                                            onClick={categoriaSelecionada === 'recentes' ? limparTodoHistorico : limparTodaMinhaLista}
-                                            style={{ padding: '8px 15px', backgroundColor: '#333', color: '#fff', border: '1px solid #444', borderRadius: '5px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px' }}
-                                        >
-                                            <Trash2 size={16} color="#ff4444" /> Limpar {categoriaSelecionada === 'recentes' ? 'Histórico' : 'Lista'} de {tipoAtual === 'filmes' ? 'Filmes' : tipoAtual === 'series' ? 'Séries' : 'TV'}
-                                        </button>
-                                    </div>
+                        )}
+
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
+                            {itensGrid.map((item, index) => (
+                            <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
+                                style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
+                                
+                                {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
+                                    <button
+                                        tabIndex={0}
+                                        className="tv-focusable"
+                                        onClick={(e) => categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter') categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e); }}
+                                        style={{
+                                            position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(20,20,20,0.9)',
+                                            color: '#ff4444', border: '1px solid #ff4444', borderRadius: '4px', padding: '6px',
+                                            zIndex: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                            transition: '0.2s'
+                                        }}
+                                        title={categoriaSelecionada === 'recentes' ? "Remover do Histórico" : "Remover da Lista"}
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 )}
 
-                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
-                                    {conteudoParaExibir.map((item, index) => (
-                                    <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
-                                        style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
-                                        
-                                        {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
-                                            <button
-                                                tabIndex={0}
-                                                className="tv-focusable"
-                                                onClick={(e) => categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e)}
-                                                onKeyDown={(e) => { if (e.key === 'Enter') categoriaSelecionada === 'recentes' ? removerDoHistorico(item, e) : removerDaMinhaLista(item, e); }}
-                                                style={{
-                                                    position: 'absolute', top: '8px', left: '8px', backgroundColor: 'rgba(20,20,20,0.9)',
-                                                    color: '#ff4444', border: '1px solid #ff4444', borderRadius: '4px', padding: '6px',
-                                                    zIndex: 20, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                                    transition: '0.2s'
-                                                }}
-                                                title={categoriaSelecionada === 'recentes' ? "Remover do Histórico" : "Remover da Lista"}
-                                            >
-                                                <Trash2 size={16} />
-                                            </button>
-                                        )}
-
-                                        {item?.rating && item.rating !== "0" && item.rating !== 0 && (
-                                        <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
-                                            <Star size={12} fill="currentColor" /> {item.rating}
-                                        </div>
-                                        )}
-
-                                        <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
-                                        <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
-                                    </div>
-                                    ))}
+                                {item?.rating && item.rating !== "0" && item.rating !== 0 && (
+                                <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.8)', color: '#f5c518', padding: '4px 6px', borderRadius: '4px', fontSize: '12px', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '4px', zIndex: 10 }}>
+                                    <Star size={12} fill="currentColor" /> {item.rating}
                                 </div>
-                            </>
-                            )}
-                            
-                            {categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' && conteudoParaExibir.length < conteudoSeguro.filter(item => String(item?.category_id) === String(categoriaSelecionada)).length && (
-                            <div style={{ textAlign: 'center', marginTop: '30px' }}>
-                                <button tabIndex={0} className="tv-focusable" onClick={() => setLimite(limite + 50)} style={{ padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px' }}>Carregar mais da categoria</button>
+                                )}
+
+                                <img src={item?.stream_icon || item?.cover || CAPA_PADRAO} alt={item?.name} loading="lazy" onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', height: tipoAtual === 'ao-vivo' ? '140px' : '270px', objectFit: 'cover', backgroundColor: '#000' }} />
+                                <div style={{ padding: '10px', textAlign: 'center' }}><div style={{ fontWeight: 'bold', fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item?.name}</div></div>
                             </div>
-                            )}
-                        </>
+                            ))}
+                        </div>
+                        
+                        {categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' && conteudoParaExibir.length < conteudo.length && (
+                        <div style={{ textAlign: 'center', marginTop: '30px' }}>
+                            <button tabIndex={0} className="tv-focusable" onClick={() => setLimite(limite + 50)} style={{ padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px' }}>Carregar mais da categoria</button>
+                        </div>
                         )}
+                    </>
+                  )}
                 </>
               )}
             </>
