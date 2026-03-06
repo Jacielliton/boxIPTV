@@ -24,7 +24,8 @@ app.add_middleware(
         "http://iptv.tecnopriv.top",  
         "https://iptv.tecnopriv.top", 
         "capacitor://localhost",      
-        "http://localhost",           
+        "http://localhost",
+        "https://localhost",           
         "ionic://localhost"
     ],
     allow_credentials=True,
