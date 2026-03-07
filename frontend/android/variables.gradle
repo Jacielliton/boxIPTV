@@ -13,5 +13,7 @@ ext {
     androidxJunitVersion = '1.2.1'
     androidxEspressoCoreVersion = '3.6.1'
     cordovaAndroidVersion = '10.1.1'
-    kotlin_version = '1.8.22'
+    kotlin_version = '1.9.24'
+    compose_bom_version = '2024.10.01'
+    compose_compiler_version = '1.5.14'
 }

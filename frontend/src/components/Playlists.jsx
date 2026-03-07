@@ -154,28 +154,40 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '20px', marginBottom: '30px' }}>
             {playlists.map(pl => (
-              <div key={pl.id} className="tv-focusable" onClick={() => onSelectPlaylist(pl)} style={{ backgroundColor: '#1f1f1f', padding: '25px', borderRadius: '12px', cursor: 'pointer', border: '1px solid #333', position: 'relative', transition: '0.3s' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ flex: 1 }}>
-                        <h3 style={{ margin: '0 0 15px 0', color: '#fff', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <Monitor size={20} color="#e50914" /> {pl.name}
-                        </h3>
-                        <div style={{ color: '#aaa', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><User size={14} /> {pl.iptv_username}</div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}><Globe size={14} /> {pl.server_url}</div>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={(e) => handleDeletarPlaylist(e, pl.id)}
-                        className="tv-focusable"
-                        style={{ background: 'rgba(255,255,255,0.05)', border: 'none', color: '#ff4444', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}
-                        title="Remover Lista"
-                    >
-                        <Trash2 size={18} />
-                    </button>
+            <div 
+              key={pl.id} 
+              style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }} // Container flexível
+            >
+              {/* ÁREA DA PLAYLIST (FOCO PRINCIPAL) */}
+              <div 
+                className="tv-focusable" 
+                tabIndex={0}
+                onClick={() => onSelectPlaylist(pl)} 
+                onKeyDown={(e) => { if(e.key === 'Enter') onSelectPlaylist(pl) }} // Suporte ao controle
+                style={{ flex: 1, backgroundColor: '#1f1f1f', padding: '25px', borderRadius: '12px', cursor: 'pointer', border: '1px solid #333', transition: '0.3s' }}
+              >
+                <h3 style={{ margin: '0 0 15px 0', color: '#fff', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <Monitor size={20} color="#e50914" /> {pl.name}
+                </h3>
+                <div style={{ color: '#aaa', fontSize: '14px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><User size={14} /> {pl.iptv_username}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Globe size={14} /> {pl.server_url}</div>
                 </div>
               </div>
-            ))}
+
+              {/* ÁREA DA LIXEIRA (FOCO SEPARADO) */}
+              <button 
+                  className="tv-focusable"
+                  tabIndex={0}
+                  onClick={(e) => handleDeletarPlaylist(e, pl.id)}
+                  onKeyDown={(e) => { if(e.key === 'Enter') handleDeletarPlaylist(e, pl.id) }} // Suporte ao controle
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1f1f1f', border: '1px solid #333', color: '#ff4444', padding: '0 20px', borderRadius: '12px', cursor: 'pointer' }}
+                  title="Remover Lista"
+              >
+                  <Trash2 size={24} />
+              </button>
+            </div>
+          ))}
             
             {!mostrarForm && (
               <div className="tv-focusable" onClick={() => setMostrarForm(true)} style={{ backgroundColor: 'transparent', padding: '25px', borderRadius: '12px', cursor: 'pointer', border: '2px dashed #333', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '120px', color: '#555' }}>

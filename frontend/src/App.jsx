@@ -14,12 +14,22 @@ function App() {
   
   const [playlistAtiva, setPlaylistAtiva] = useState(null);
   
-  // REGRA DE OURO: Verifica apenas UMA VEZ ao abrir o App.
-  // Combina o tamanho da tela com a deteção do sistema Android/iOS.
-  const [isMobile] = useState(() => {
-    const isMobileSize = window.innerWidth < 768 || window.innerHeight < 500;
-    const isMobileAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    return isMobileSize || isMobileAgent;
+  // REGRA DE OURO ATUALIZADA:
+  // A verificação anterior considerava qualquer "Android" como mobile (TV Boxes rodam Android).
+  // Agora, verificamos ativamente se é uma TV ou se o dispositivo NÃO tem touch (TV Box).
+  const [isTV] = useState(() => {
+    const ua = navigator.userAgent.toLowerCase();
+    
+    // 1. Verifica nomes comuns de TV e TV Boxes no navegador
+    const isTVString = /(tv|smarttv|googletv|appletv|hbbtv|bravia|netcast|viera|vidaa|webos|box|mibox|aft|android tv)/i.test(ua);
+    
+    // 2. Heurística para TV Box genérica (como MXQ Pro, TX9, etc):
+    // Se a tela for deitada (paisagem) e o dispositivo NÃO tiver tela touch, é uma TV Box.
+    const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0) || (navigator.msMaxTouchPoints > 0);
+    const isLandscape = window.innerWidth > window.innerHeight;
+    
+    // Se tiver string de TV ou (for paisagem e não tiver touch)
+    return isTVString || (!hasTouch && isLandscape);
   });
 
   const efetuarLogin = (dadosSessao) => {
@@ -37,16 +47,17 @@ function App() {
 
   if (!playlistAtiva) return <Playlists token={sessaoUsuario.token} onSelectPlaylist={setPlaylistAtiva} onLogout={efetuarLogout} sessaoUsuario={sessaoUsuario} />;
 
-  // Como retiramos o 'useEffect' do 'resize', o layout agora é imutável até recarregar a app!
-  return isMobile ? (
-    <AppMobile 
+  // Se a verificação detectar que é uma TV (isTV = true), renderiza AppTV.
+  // Caso contrário, renderiza AppMobile.
+  return isTV ? (
+    <AppTV 
       sessaoUsuario={sessaoUsuario} 
       playlistAtiva={playlistAtiva} 
       efetuarLogout={efetuarLogout} 
       setPlaylistAtiva={setPlaylistAtiva}
     />
   ) : (
-    <AppTV 
+    <AppMobile 
       sessaoUsuario={sessaoUsuario} 
       playlistAtiva={playlistAtiva} 
       efetuarLogout={efetuarLogout} 

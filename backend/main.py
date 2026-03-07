@@ -67,7 +67,7 @@ def create_access_token(data: dict, expires_delta: timedelta = timedelta(days=36
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credenciais_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Não foi possível validar as credenciais",
+        detail="Não foi possível validar as credenciais. Verifique o seu usuário ou senha, ou faça Download do APK atualizado.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     try:
@@ -119,9 +119,9 @@ def register_user(user_data: UserCreate, db: Session = Depends(get_db)):
 def login(user_data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.username == user_data.username).first()
     if not user or not verify_password(user_data.password, user.hashed_password):
-        raise HTTPException(status_code=401, detail="Credenciais incorretas")
+        raise HTTPException(status_code=401, detail="Credenciais incorretas. Verifique a senha ou o nome de usuário.")
     if hasattr(user, 'is_active') and not user.is_active:
-        raise HTTPException(status_code=403, detail="Conta desabilitada pelo administrador.")
+        raise HTTPException(status_code=403, detail="Conta desabilitada pelo administrador. Faça Download do APK atualizado.")
     if not user.is_admin:
         if user.premium_until is None or datetime.utcnow() > user.premium_until:
             raise HTTPException(status_code=403, detail="Seu período premium expirou.")
