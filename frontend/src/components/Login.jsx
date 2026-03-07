@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { User, Lock, Eye, EyeOff, Loader2, MonitorPlay } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, Loader2, MonitorPlay, Download } from 'lucide-react'; // Ícone de Download adicionado
 
 export default function Login({ onLogin }) {
   const [modoLogin, setModoLogin] = useState(true); // true = Login, false = Registo
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmarSenha, setConfirmarSenha] = useState(''); // Novo estado para confirmação
   const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [mostrarConfirmarSenha, setMostrarConfirmarSenha] = useState(false); // Visibilidade da segunda senha
   
   const [erro, setErro] = useState('');
   const [sucesso, setSucesso] = useState('');
@@ -16,15 +18,21 @@ export default function Login({ onLogin }) {
     setErro('');
     setSucesso('');
     
-    if (!username || !password) {
+    // Validação de campos vazios
+    if (!username || !password || (!modoLogin && !confirmarSenha)) {
       setErro('Por favor, preencha todos os campos.');
+      return;
+    }
+
+    // Validação de senhas iguais no registo
+    if (!modoLogin && password !== confirmarSenha) {
+      setErro('As palavras-passe não coincidem.');
       return;
     }
 
     setCarregando(true);
 
     try {
-      // Os caminhos relativos puros ('/api/...') garantem que o mudar_ambiente.py funciona perfeitamente!
       const url = modoLogin ? '/api/login' : '/api/register';
       
       const response = await fetch(url, {
@@ -40,7 +48,6 @@ export default function Login({ onLogin }) {
       }
 
       if (modoLogin) {
-        // Se for login, passa os dados (incluindo o token JWT) para o App.jsx
         onLogin({
           token: data.access_token,
           username: username,
@@ -48,10 +55,10 @@ export default function Login({ onLogin }) {
           premiumUntil: data.premium_until
         });
       } else {
-        // Se for registo, mostra sucesso, muda para a aba de login e limpa a senha por segurança
         setSucesso(data.message || 'Conta criada com sucesso! Faça Login.');
         setModoLogin(true);
         setPassword('');
+        setConfirmarSenha(''); // Limpa a confirmação por segurança
       }
 
     } catch (error) {
@@ -63,7 +70,7 @@ export default function Login({ onLogin }) {
 
   return (
     <div style={{ 
-      display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', 
+      display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', 
       backgroundColor: '#141414', color: 'white',
       background: 'radial-gradient(circle at center, #2a0808 0%, #141414 100%)',
       padding: '20px', boxSizing: 'border-box'
@@ -99,7 +106,7 @@ export default function Login({ onLogin }) {
           />
         </div>
 
-        <div style={{ marginBottom: '30px', position: 'relative' }}>
+        <div style={{ marginBottom: modoLogin ? '30px' : '20px', position: 'relative' }}>
           <Lock size={20} color="#888" style={{ position: 'absolute', left: '15px', top: '14px' }} />
           <input 
             type={mostrarSenha ? "text" : "password"} 
@@ -121,6 +128,31 @@ export default function Login({ onLogin }) {
           </button>
         </div>
 
+        {/* CAMPO DE CONFIRMAR SENHA (Apenas no Registo) */}
+        {!modoLogin && (
+          <div style={{ marginBottom: '30px', position: 'relative' }}>
+            <Lock size={20} color="#888" style={{ position: 'absolute', left: '15px', top: '14px' }} />
+            <input 
+              type={mostrarConfirmarSenha ? "text" : "password"} 
+              placeholder="Confirmar Palavra-passe"
+              value={confirmarSenha} 
+              onChange={(e) => setConfirmarSenha(e.target.value)}
+              className="tv-focusable"
+              style={{ width: '100%', padding: '14px 45px 14px 45px', borderRadius: '8px', border: '1px solid #444', background: '#1a1a1a', color: 'white', outline: 'none', boxSizing: 'border-box', fontSize: '15px', transition: 'border 0.3s' }}
+              onFocus={(e) => e.target.style.border = '1px solid #e50914'}
+              onBlur={(e) => e.target.style.border = '1px solid #444'}
+            />
+            <button 
+              type="button"
+              onClick={() => setMostrarConfirmarSenha(!mostrarConfirmarSenha)}
+              tabIndex="-1"
+              style={{ position: 'absolute', right: '15px', top: '14px', background: 'none', border: 'none', color: '#888', cursor: 'pointer', padding: 0 }}
+            >
+              {mostrarConfirmarSenha ? <EyeOff size={20} /> : <Eye size={20} />}
+            </button>
+          </div>
+        )}
+
         <button 
           type="submit" 
           disabled={carregando}
@@ -136,7 +168,13 @@ export default function Login({ onLogin }) {
           </span>
           <button 
             type="button" 
-            onClick={() => { setModoLogin(!modoLogin); setErro(''); setSucesso(''); }}
+            onClick={() => { 
+              setModoLogin(!modoLogin); 
+              setErro(''); 
+              setSucesso(''); 
+              setPassword(''); 
+              setConfirmarSenha(''); // Limpa campos ao trocar de aba
+            }}
             className="tv-focusable"
             style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', padding: '5px' }}
           >
@@ -144,6 +182,34 @@ export default function Login({ onLogin }) {
           </button>
         </div>
       </form>
+
+      {/* LINK DE DOWNLOAD DO APLICATIVO ANDROID */}
+      <div style={{ marginTop: '30px', textAlign: 'center' }}>
+        <a 
+          href="http://tecnopriv.top/download/iptv/BOXIPTV_PRO_3.0.apk" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="tv-focusable"
+          style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: '8px', 
+            color: '#aaa', 
+            textDecoration: 'none', 
+            fontSize: '15px',
+            padding: '10px 20px',
+            borderRadius: '20px',
+            border: '1px solid #333',
+            background: 'rgba(20, 20, 20, 0.6)',
+            transition: 'all 0.3s ease'
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = 'white'; e.currentTarget.style.borderColor = '#e50914'; e.currentTarget.style.background = 'rgba(229, 9, 20, 0.1)'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.background = 'rgba(20, 20, 20, 0.6)'; }}
+        >
+          <Download size={18} /> Baixar App Android
+        </a>
+      </div>
+
     </div>
   );
 }
