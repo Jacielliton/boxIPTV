@@ -253,10 +253,16 @@ export default function Player({ channel, onClose, startTime, poster }) {
             onClick={resetControlsTimeout}
             tabIndex={0}
             className="tv-focusable" 
-            style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+            style={{ 
+                position: 'fixed', top: 0, left: 0, 
+                /* A MÁGICA PARA O VÍDEO NÃO FICAR PEQUENO: */
+                width: 'calc(100vw / var(--escala-tv, 1))', 
+                height: 'calc(100vh / var(--escala-tv, 1))', 
+                background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' 
+            }}
         >
             <video 
-                ref={videoRef} 
+                ref={videoRef}
                 poster={poster}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={() => { if (startTime > 0) videoRef.current.currentTime = startTime; }}

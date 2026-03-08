@@ -1,8 +1,15 @@
 {
-  "appId": "com.seuapp.iptv",
+  "appId": "com.tecnopriv.boxiptv",
   "appName": "BoxIPTV",
   "webDir": "dist",
   "bundledWebRuntime": false,
+  "server": {
+    "androidScheme": "http", 
+    "cleartext": true,
+    "allowNavigation": [
+      "*"
+    ]
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 3000,

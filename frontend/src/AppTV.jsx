@@ -13,6 +13,13 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const [conteudo, setConteudo] = useState([]);
   const [tipoAtual, setTipoAtual] = useState('filmes'); 
   const [busca, setBusca] = useState('');
+  
+  // ==========================================
+  // NOVO: Estados para a Barra de Pesquisa
+  // ==========================================
+  const [modoBusca, setModoBusca] = useState(false);
+  const inputBuscaRef = useRef(null);
+
   const [itemSelecionado, setItemSelecionado] = useState(null);
   const [carregando, setCarregando] = useState(false);
   const [limite, setLimite] = useState(50);
@@ -30,9 +37,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const categoriasScrollRef = useRef(null); 
   const [indiceDestaque, setIndiceDestaque] = useState(0);
 
-  // ==========================================
-  // FUNÇÃO CORRIGIDA E RESTAURADA AQUI
-  // ==========================================
   const fecharDetalhes = () => {
     setSerieDetalhes(null);
     setFilmeDetalhes(null);
@@ -52,6 +56,21 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     try { return JSON.parse(localStorage.getItem(`boxiptv_progresso_${sessaoUsuario.username}`)) || {}; } catch (e) { return {}; }
   });
 
+  // ==========================================
+  // COMPENSAÇÃO MATEMÁTICA DE ESCALA
+  // ==========================================
+  const ESCALA_TV = 0.75; // Pode alterar livremente para 0.70 ou 0.75 depois
+
+  useEffect(() => {
+    document.body.style.zoom = ESCALA_TV;
+    // Salva a escala em uma variável global para o CSS usar nos cálculos
+    document.documentElement.style.setProperty('--escala-tv', ESCALA_TV);
+    
+    return () => {
+      document.body.style.zoom = "1";
+      document.documentElement.style.setProperty('--escala-tv', '1');
+    };
+  }, []);
   const getIptvUrl = (action, extraParams = '') => {
     let baseUrl = playlistAtiva.server_url.trim();
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
@@ -59,9 +78,13 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
   };
 
-  // ==========================================
-  // 1º PASSO: CARREGAR AS CATEGORIAS E SELECIONAR A PRIMEIRA
-  // ==========================================
+  // Efeito para focar no input quando a busca for ativada
+  useEffect(() => {
+    if (modoBusca && inputBuscaRef.current) {
+      inputBuscaRef.current.focus();
+    }
+  }, [modoBusca]);
+
   useEffect(() => {
     if (!playlistAtiva) return;
     setCarregando(true);
@@ -83,9 +106,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       }).catch(err => { setCategorias([]); setCarregando(false); });
   }, [tipoAtual, playlistAtiva]);
 
-  // ==========================================
-  // 2º PASSO: CARREGAR CONTEÚDO APENAS DA CATEGORIA SELECIONADA
-  // ==========================================
   useEffect(() => {
     if (!playlistAtiva || !categoriaSelecionada) return;
 
@@ -97,7 +117,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setCarregando(true);
     fecharDetalhes();
     setLimite(50);
-    setConteudo([]); // Limpa a UI para novo load
+    setConteudo([]); 
     
     const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
     
@@ -116,13 +136,11 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   } else if (categoriaSelecionada === 'minha-lista') {
     conteudoParaExibir = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
   } else {
-    // API já filtrou por categoria. Falta apenas o filtro de texto local
     conteudoParaExibir = conteudo.filter(item => {
         return !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()));
     }).slice(0, limite);
   }
 
-  // Banner Inteligente: Apenas exibe se for numa categoria e sem busca
   const itensDestaqueRaw = conteudoParaExibir.length > 0 && busca === '' && categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' ? conteudoParaExibir.slice(0, 6) : [];
   const paresDestaque = [];
   for (let i = 0; i < itensDestaqueRaw.length; i += 2) {
@@ -151,7 +169,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const handleMouseUp = (e) => { dragRef.current.isDown = false; e.currentTarget.style.cursor = 'grab'; };
   const handleMouseMove = (e) => { if (!dragRef.current.isDown) return; e.preventDefault(); const walkX = (e.pageX - e.currentTarget.offsetLeft - dragRef.current.startX) * 1.5; const walkY = (e.pageY - e.currentTarget.offsetTop - dragRef.current.startY) * 1.5; if (Math.abs(walkX) > 5 || Math.abs(walkY) > 5) dragRef.current.dragged = true; e.currentTarget.scrollLeft = dragRef.current.scrollLeft - walkX; e.currentTarget.scrollTop = dragRef.current.scrollTop - walkY; };
 
-  // Abrir Detalhes Direto do IPTV
   const handleItemClick = (item) => {
     if (dragRef.current.dragged || !item) return;
     registrarHistorico(item, tipoAtual); setItemAtualDetalhes(item); setCarregando(true);
@@ -167,35 +184,85 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     if (!filmeDetalhes || !filmeDetalhes.movie_data) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    setItemSelecionado({ id: filmeDetalhes.movie_data.stream_id, nome: filmeDetalhes.info?.name, url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.${filmeDetalhes.movie_data.container_extension || 'mp4'}`, startTime: inicio, poster: canalDetalhes.info?.stream_icon });
+    setItemSelecionado({ 
+        id: filmeDetalhes.movie_data.stream_id, 
+        nome: filmeDetalhes.info?.name, 
+        url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.${filmeDetalhes.movie_data.container_extension || 'mp4'}`, 
+        startTime: inicio, 
+        poster: filmeDetalhes.info?.movie_image 
+    });
   };
 
   const handlePlayEpisode = (ep, inicio = 0) => {
     if (!ep) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    setItemSelecionado({ id: ep.id, nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, startTime: inicio, poster: canalDetalhes.info?.stream_icon });
+    setItemSelecionado({ 
+        id: ep.id, 
+        nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, 
+        url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, 
+        startTime: inicio, 
+        poster: ep.info?.movie_image || serieDetalhes?.info?.cover 
+    });
   };
 
   const handlePlayCanal = () => {
     if (!canalDetalhes || !canalDetalhes.info) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    setItemSelecionado({ id: canalDetalhes.info.stream_id, nome: canalDetalhes.info.name, url: `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`, startTime: 0, poster: canalDetalhes.info?.stream_icon });
+    setItemSelecionado({ 
+        id: canalDetalhes.info.stream_id, 
+        nome: canalDetalhes.info.name, 
+        url: `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`, 
+        startTime: 0, 
+        poster: canalDetalhes.info?.stream_icon 
+    });
   };
 
   // ==========================================
-  // NAVEGAÇÃO ESPACIAL E AUXILIARES
+  // NAVEGAÇÃO ESPACIAL E CONTROLE DE BOTÃO VOLTAR
   // ==========================================
   useEffect(() => {
       const handleKeyDown = (e) => {
+        
+        // ----------------------------------------------------
+        // 1. LÓGICA DO BOTÃO VOLTAR (BACKSPACE / ESCAPE)
+        // ----------------------------------------------------
+        if (e.key === 'Escape' || e.key === 'Backspace') {
+          // A MÁGICA AQUI: Bloqueia imediatamente o Android de fechar o app!
+          e.preventDefault(); 
+
+          // A. Se o Player de vídeo estiver aberto, deixa o Player cuidar do Voltar
+          if (itemSelecionado) return;
+
+          // B. Se a barra de pesquisa estiver ativa, feche apenas a pesquisa
+          if (modoBusca) {
+            setModoBusca(false);
+            return;
+          }
+
+          // C. Se estiver na tela de detalhes de um filme/série, fecha e volta para a grade
+          if (filmeDetalhes || serieDetalhes || canalDetalhes) {
+            fecharDetalhes();
+            return;
+          }
+        }
+
+        // ----------------------------------------------------
+        // 2. LÓGICA DAS SETAS (NAVEGAÇÃO)
+        // ----------------------------------------------------
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (!arrowKeys.includes(e.key)) return;
+        
         const currentFocus = document.activeElement;
-        if (currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+        
+        // Se estivermos no modo de busca digitando, não atrapalha as setas laterais do input
+        if (modoBusca && currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+        
         const focusables = Array.from(document.querySelectorAll('.tv-focusable')).filter(el => { const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && getComputedStyle(el).opacity !== '0'; });
         if (!focusables.includes(currentFocus)) { if (focusables.length > 0) focusables[0].focus(); e.preventDefault(); return; }
         e.preventDefault(); const currentRect = currentFocus.getBoundingClientRect(); let bestNext = null; let minDistance = Infinity;
+        
         focusables.forEach(candidate => {
           if (candidate === currentFocus) return;
           const candidateRect = candidate.getBoundingClientRect();
@@ -208,8 +275,11 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         });
         if (bestNext) { bestNext.focus({ preventScroll: true }); if (bestNext.closest('.conteudo-container')) bestNext.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); else if (categoriasScrollRef.current && categoriasScrollRef.current.contains(bestNext)) { const container = categoriasScrollRef.current; container.scrollTo({ top: bestNext.offsetTop - (container.clientHeight / 2) + (bestNext.clientHeight / 2), behavior: 'smooth' }); } else if (!bestNext.closest('.sidebar-container')) bestNext.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }); }
       };
-      window.addEventListener('keydown', handleKeyDown); return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+      
+      window.addEventListener('keydown', handleKeyDown); 
+      return () => window.removeEventListener('keydown', handleKeyDown);
+      
+  }, [modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes, itemSelecionado]);
 
   const handleImageError = (e, fallback) => { if (e.target.src !== fallback) { e.target.onerror = null; e.target.src = fallback; } };
   
@@ -231,7 +301,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   if (mostrarAdmin) return <AdminPanel token={sessaoUsuario.token} onVoltar={() => setMostrarAdmin(false)} />;
 
   return (
-    <div style={{ padding: '20px', fontFamily: 'Arial', backgroundColor: '#141414', minHeight: '100vh', color: '#fff' }}>
+    <div style={{ padding: '20px', fontFamily: 'Arial', backgroundColor: '#141414', minHeight: 'calc(100vh / var(--escala-tv, 1))', color: '#fff' }}>
       
       <style>{`
         *::-webkit-scrollbar, body::-webkit-scrollbar, html::-webkit-scrollbar { display: none !important; width: 0 !important; height: 0 !important; background: transparent !important; -webkit-appearance: none !important; }
@@ -254,25 +324,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('ao-vivo'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'ao-vivo' ? '#e50914' : 'transparent', color: tipoAtual === 'ao-vivo' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Radio size={20} /> TV ao Vivo
           </button>
-        </div>
-
-        <div style={{ marginBottom: '15px', position: 'relative' }}>
-            <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input 
-              tabIndex={0} 
-              className="tv-focusable" 
-              type="text" 
-              placeholder={`Buscar na categoria...`} 
-              value={busca} 
-              onChange={(e) => { 
-                setBusca(e.target.value); 
-                setLimite(50); 
-                fecharDetalhes(); 
-                window.scrollTo({ top: 0, behavior: 'smooth' }); 
-              }} 
-              style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: 'none', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: 'white', boxSizing: 'border-box' }} 
-            />
-          </div>
+        </div>        
 
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>   
           <span style={{ color: '#aaa', fontSize: '14px', marginRight: '5px' }}>
@@ -295,7 +347,44 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
         
-        <div className="sidebar-container" style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>                    
+        <div className="sidebar-container" style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc((100vh / var(--escala-tv, 1)) - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>
+
+          {/* LÓGICA DE BARRA DE PESQUISA ATUALIZADA */}
+          <div style={{ marginBottom: '15px', position: 'relative' }}>
+            <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', zIndex: 2 }} />
+            
+            {!modoBusca ? (
+              <button 
+                tabIndex={0} 
+                className="tv-focusable" 
+                onClick={() => setModoBusca(true)}
+                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '1px solid #333', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: busca ? 'white' : '#aaa', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+              >
+                {busca ? busca : "Buscar na categoria..."}
+              </button>
+            ) : (
+              <input 
+                ref={inputBuscaRef}
+                className="tv-focusable" 
+                type="text" 
+                placeholder="Digite e aperte OK..." 
+                value={busca} 
+                onChange={(e) => { 
+                  setBusca(e.target.value); 
+                  setLimite(50); 
+                  fecharDetalhes(); 
+                  window.scrollTo({ top: 0, behavior: 'smooth' }); 
+                }}
+                onBlur={() => setModoBusca(false)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === 'Escape') {
+                    setModoBusca(false);
+                  }
+                }}
+                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '2px solid #e50914', outline: 'none', fontSize: '14px', backgroundColor: '#444', color: 'white', boxSizing: 'border-box' }} 
+              />
+            )}
+          </div>                    
 
           <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 10px 0', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
             <li tabIndex={0} className="tv-focusable" onClick={() => handleCategoriaClick('minha-lista')} onKeyDown={(e) => acionarComEnter(e, () => handleCategoriaClick('minha-lista'))} style={{ display: 'flex', alignItems: 'center', padding: '12px 10px', cursor: 'pointer', borderRadius: '5px', marginBottom: '5px', fontSize: '14px', backgroundColor: categoriaSelecionada === 'minha-lista' ? '#e50914' : 'transparent', fontWeight: 'bold', color: '#fff' }}>
@@ -333,16 +422,9 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
           {filmeDetalhes && filmeDetalhes.info ? (
             <div style={{ backgroundColor: '#222', padding: '30px', borderRadius: '8px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
-              <img src={filmeDetalhes.info.movie_image || CAPA_PADRAO} alt={filmeDetalhes.info.name || 'Sem Título'} onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '250px', borderRadius: '8px', objectFit: 'cover', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }} />
+              
               <div style={{ flex: 1, minWidth: '250px' }}>
-                <h1 style={{ marginTop: 0, marginBottom: '10px', fontSize: '32px' }}>{filmeDetalhes.info.name || 'Título Indisponível'}</h1>
-                <div style={{ display: 'flex', gap: '15px', color: '#aaa', marginBottom: '20px', fontSize: '14px', fontWeight: 'bold', alignItems: 'center', flexWrap: 'wrap' }}>
-                  {filmeDetalhes.info.rating && <span style={{display: 'flex', alignItems: 'center', gap: '5px'}}><Star size={16} color="#f5c518" fill="#f5c518" /> {filmeDetalhes.info.rating} / 10</span>}
-                  {filmeDetalhes.info.releasedate && <span>📅 {filmeDetalhes.info.releasedate}</span>}
-                  {filmeDetalhes.info.duration && <span>⏱️ {filmeDetalhes.info.duration}</span>}
-                </div>
-                <p style={{ lineHeight: '1.6', fontSize: '16px', color: '#ccc', marginBottom: '20px' }}>{filmeDetalhes.info.plot || "Sinopse não disponível."}</p>
-                {filmeDetalhes.info.cast && <p style={{ color: '#aaa', marginBottom: '30px' }}><strong>Elenco:</strong> {filmeDetalhes.info.cast}</p>}
+
                 <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                   {filmeDetalhes.movie_data && progressos[filmeDetalhes.movie_data.stream_id] > 15 ? (
                     <>
@@ -353,8 +435,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                     <button tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(0)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 40px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Iniciar Filme</button>
                   )}
                   <button tabIndex={0} className="tv-focusable" onClick={() => toggleMinhaLista(itemAtualDetalhes)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 20px', fontSize: '16px', fontWeight: 'bold', backgroundColor: itemEstaNaLista ? '#111' : '#333', color: itemEstaNaLista ? '#aaa' : 'white', border: `1px solid ${itemEstaNaLista ? '#333' : '#555'}`, borderRadius: '5px', cursor: 'pointer', transition: '0.2s' }}>{itemEstaNaLista ? <><Check size={20} /> Na Minha Lista</> : <><Bookmark size={20} /> Adicionar à Lista</>}</button>
+                  <h1 style={{ marginTop: 0, marginBottom: '10px', fontSize: '32px' }}>{filmeDetalhes.info.name || 'Título Indisponível'}</h1>
+                <div style={{ display: 'flex', gap: '15px', color: '#aaa', marginBottom: '20px', fontSize: '14px', fontWeight: 'bold', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {filmeDetalhes.info.rating && <span style={{display: 'flex', alignItems: 'center', gap: '5px'}}><Star size={16} color="#f5c518" fill="#f5c518" /> {filmeDetalhes.info.rating} / 10</span>}
+                  {filmeDetalhes.info.releasedate && <span>📅 {filmeDetalhes.info.releasedate}</span>}
+                  {filmeDetalhes.info.duration && <span>⏱️ {filmeDetalhes.info.duration}</span>}
+                </div>
+                <p style={{ lineHeight: '1.6', fontSize: '16px', color: '#ccc', marginBottom: '20px' }}>{filmeDetalhes.info.plot || "Sinopse não disponível."}</p>
+                {filmeDetalhes.info.cast && <p style={{ color: '#aaa', marginBottom: '30px' }}><strong>Elenco:</strong> {filmeDetalhes.info.cast}</p>}
                 </div>
               </div>
+              <img src={filmeDetalhes.info.movie_image || CAPA_PADRAO} alt={filmeDetalhes.info.name || 'Sem Título'} onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '250px', borderRadius: '8px', objectFit: 'cover', boxShadow: '0 4px 15px rgba(0,0,0,0.5)' }} />
             </div>
 
           ) : serieDetalhes && serieDetalhes.info ? (

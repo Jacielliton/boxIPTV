@@ -33,7 +33,7 @@ export default function Login({ onLogin }) {
     setCarregando(true);
 
     try {
-      const url = modoLogin ? '/api/login' : '/api/register';
+      const url = modoLogin ? 'http://72.60.3.89:8006/api/login' : 'http://72.60.3.89:8006/api/register';
       
       const response = await fetch(url, {
         method: 'POST',
