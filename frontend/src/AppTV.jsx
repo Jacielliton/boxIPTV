@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import Player from './components/Player';
 import AdminPanel from './components/AdminPanel';
 import { Film, Tv, Radio, Clock, LayoutGrid, LogOut, Settings, Play, RefreshCw, Star, Bookmark, Check, Search, Trash2 } from 'lucide-react';
@@ -59,7 +60,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   // ==========================================
   // COMPENSAÇÃO MATEMÁTICA DE ESCALA
   // ==========================================
-  const ESCALA_TV = 0.75; // Pode alterar livremente para 0.70 ou 0.75 depois
+  const ESCALA_TV = 0.85; // Pode alterar livremente para 0.70 ou 0.75 depois
 
   useEffect(() => {
     document.body.style.zoom = ESCALA_TV;
@@ -220,43 +221,47 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   };
 
   // ==========================================
-  // NAVEGAÇÃO ESPACIAL E CONTROLE DE BOTÃO VOLTAR
+  // NAVEGAÇÃO ESPACIAL E CONTROLE NATIVO DO BOTÃO VOLTAR
   // ==========================================
   useEffect(() => {
-      const handleKeyDown = (e) => {
-        
-        // ----------------------------------------------------
-        // 1. LÓGICA DO BOTÃO VOLTAR (BACKSPACE / ESCAPE)
-        // ----------------------------------------------------
-        if (e.key === 'Escape' || e.key === 'Backspace') {
-          // A MÁGICA AQUI: Bloqueia imediatamente o Android de fechar o app!
-          e.preventDefault(); 
-
-          // A. Se o Player de vídeo estiver aberto, deixa o Player cuidar do Voltar
-          if (itemSelecionado) return;
-
-          // B. Se a barra de pesquisa estiver ativa, feche apenas a pesquisa
-          if (modoBusca) {
-            setModoBusca(false);
-            return;
-          }
-
-          // C. Se estiver na tela de detalhes de um filme/série, fecha e volta para a grade
-          if (filmeDetalhes || serieDetalhes || canalDetalhes) {
-            fecharDetalhes();
-            return;
-          }
+      // 1. OBRIGA O APLICATIVO A NÃO FECHAR E FAZER APENAS O QUE MANDAMOS
+      const backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+        // A. Se o player estiver aberto, NÃO DEIXA FECHAR O APP, mas feche o Player internamente
+        if (itemSelecionado) {
+          // Nota: O player também tem o escape/backspace dele para se fechar.
+          return;
         }
 
-        // ----------------------------------------------------
-        // 2. LÓGICA DAS SETAS (NAVEGAÇÃO)
-        // ----------------------------------------------------
+        // B. Se a barra de pesquisa estiver ativa, feche apenas a pesquisa
+        if (modoBusca) {
+          setModoBusca(false);
+          return;
+        }
+
+        // C. Se estiver na tela de detalhes de um filme/série, fecha e volta para a grade
+        if (filmeDetalhes || serieDetalhes || canalDetalhes) {
+          fecharDetalhes();
+          return;
+        }
+        
+        // Se chegar aqui, o utilizador está no menu principal. Deixamos a app rodar sem fazer nada!
+      });
+
+      // 2. LÓGICA DAS SETAS (NAVEGAÇÃO COM TECLADO / CONTROLE)
+      const handleKeyDown = (e) => {
+        
+        if (e.key === 'Escape' || e.key === 'Backspace') {
+          e.preventDefault(); // BLOQUEIO ABSOLUTO (Garante que a app não morre na TV Box)
+          if (itemSelecionado) return;
+          if (modoBusca) { setModoBusca(false); return; }
+          if (filmeDetalhes || serieDetalhes || canalDetalhes) { fecharDetalhes(); return; }
+        }
+
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (!arrowKeys.includes(e.key)) return;
         
         const currentFocus = document.activeElement;
         
-        // Se estivermos no modo de busca digitando, não atrapalha as setas laterais do input
         if (modoBusca && currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
         
         const focusables = Array.from(document.querySelectorAll('.tv-focusable')).filter(el => { const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && getComputedStyle(el).opacity !== '0'; });
@@ -277,7 +282,13 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       };
       
       window.addEventListener('keydown', handleKeyDown); 
-      return () => window.removeEventListener('keydown', handleKeyDown);
+      
+      // Limpeza dos eventos ao desmontar o componente
+      return () => {
+        window.removeEventListener('keydown', handleKeyDown);
+        // O removeAllListeners garante que não há comandos "fantasmas" a fechar a app.
+        CapacitorApp.removeAllListeners(); 
+      };
       
   }, [modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes, itemSelecionado]);
 

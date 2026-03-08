@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { App as CapacitorApp } from '@capacitor/app';
 import mpegts from 'mpegts.js';
 import Hls from 'hls.js';
 import { Play, Pause, Maximize, ArrowLeft, Loader2 } from 'lucide-react';
@@ -46,6 +47,17 @@ export default function Player({ channel, onClose, startTime, poster }) {
         }
         if (onClose) onClose(videoRef.current?.currentTime || 0, videoRef.current?.duration || 0);
     };
+
+    useEffect(() => {
+        const backListener = CapacitorApp.addListener('backButton', () => {
+            fecharPlayer(); 
+        });
+        
+        return () => {
+            backListener.then(listener => listener.remove());
+        };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     const resetControlsTimeout = () => {
         setShowControls(true);
@@ -255,9 +267,9 @@ export default function Player({ channel, onClose, startTime, poster }) {
             className="tv-focusable" 
             style={{ 
                 position: 'fixed', top: 0, left: 0, 
-                /* A MÁGICA PARA O VÍDEO NÃO FICAR PEQUENO: */
-                width: 'calc(100vw / var(--escala-tv, 1))', 
-                height: 'calc(100vh / var(--escala-tv, 1))', 
+                /* VOLTAMOS PARA 100% PARA O VÍDEO APARECER NA TV BOX: */
+                width: '100%', 
+                height: '100%', 
                 background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' 
             }}
         >
@@ -271,7 +283,7 @@ export default function Player({ channel, onClose, startTime, poster }) {
                 onWaiting={() => setIsBuffering(true)} 
                 onPlaying={() => { setIsBuffering(false); setErroPlayback(false); }} 
                 referrerPolicy="no-referrer" 
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
+                style={{ width: '100%', height: '100%', objectFit: 'contain', minWidth: '100vw', minHeight: '100vh' }} 
             />
 
             {erroPlayback && (
