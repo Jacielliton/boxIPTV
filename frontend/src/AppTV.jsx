@@ -167,21 +167,21 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     if (!filmeDetalhes || !filmeDetalhes.movie_data) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    setItemSelecionado({ id: filmeDetalhes.movie_data.stream_id, nome: filmeDetalhes.info?.name, url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.${filmeDetalhes.movie_data.container_extension || 'mp4'}`, startTime: inicio });
+    setItemSelecionado({ id: filmeDetalhes.movie_data.stream_id, nome: filmeDetalhes.info?.name, url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.${filmeDetalhes.movie_data.container_extension || 'mp4'}`, startTime: inicio, poster: canalDetalhes.info?.stream_icon });
   };
 
   const handlePlayEpisode = (ep, inicio = 0) => {
     if (!ep) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    setItemSelecionado({ id: ep.id, nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, startTime: inicio });
+    setItemSelecionado({ id: ep.id, nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, startTime: inicio, poster: canalDetalhes.info?.stream_icon });
   };
 
   const handlePlayCanal = () => {
     if (!canalDetalhes || !canalDetalhes.info) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    setItemSelecionado({ id: canalDetalhes.info.stream_id, nome: canalDetalhes.info.name, url: `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`, startTime: 0 });
+    setItemSelecionado({ id: canalDetalhes.info.stream_id, nome: canalDetalhes.info.name, url: `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`, startTime: 0, poster: canalDetalhes.info?.stream_icon });
   };
 
   // ==========================================
@@ -256,6 +256,24 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           </button>
         </div>
 
+        <div style={{ marginBottom: '15px', position: 'relative' }}>
+            <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
+            <input 
+              tabIndex={0} 
+              className="tv-focusable" 
+              type="text" 
+              placeholder={`Buscar na categoria...`} 
+              value={busca} 
+              onChange={(e) => { 
+                setBusca(e.target.value); 
+                setLimite(50); 
+                fecharDetalhes(); 
+                window.scrollTo({ top: 0, behavior: 'smooth' }); 
+              }} 
+              style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: 'none', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: 'white', boxSizing: 'border-box' }} 
+            />
+          </div>
+
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>   
           <span style={{ color: '#aaa', fontSize: '14px', marginRight: '5px' }}>
             Usuário: <strong style={{ color: 'white' }}>{sessaoUsuario.username}</strong>
@@ -277,24 +295,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       
       <div style={{ display: 'flex', gap: '20px', alignItems: 'flex-start' }}>
         
-        <div className="sidebar-container" style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>
-          <div style={{ marginBottom: '15px', position: 'relative' }}>
-            <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)' }} />
-            <input 
-              tabIndex={0} 
-              className="tv-focusable" 
-              type="text" 
-              placeholder={`Buscar na categoria...`} 
-              value={busca} 
-              onChange={(e) => { 
-                setBusca(e.target.value); 
-                setLimite(50); 
-                fecharDetalhes(); 
-                window.scrollTo({ top: 0, behavior: 'smooth' }); 
-              }} 
-              style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: 'none', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: 'white', boxSizing: 'border-box' }} 
-            />
-          </div>
+        <div className="sidebar-container" style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc(100vh - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>                    
 
           <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 10px 0', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
             <li tabIndex={0} className="tv-focusable" onClick={() => handleCategoriaClick('minha-lista')} onKeyDown={(e) => acionarComEnter(e, () => handleCategoriaClick('minha-lista'))} style={{ display: 'flex', alignItems: 'center', padding: '12px 10px', cursor: 'pointer', borderRadius: '5px', marginBottom: '5px', fontSize: '14px', backgroundColor: categoriaSelecionada === 'minha-lista' ? '#e50914' : 'transparent', fontWeight: 'bold', color: '#fff' }}>
@@ -328,7 +329,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         </div>
 
         <div className="conteudo-container" style={{ flex: 1, minWidth: 0 }}>
-          {itemSelecionado && <Player channel={itemSelecionado} onClose={handleClosePlayer} startTime={itemSelecionado.startTime || 0} />}
+          {itemSelecionado && <Player channel={itemSelecionado} onClose={handleClosePlayer} startTime={itemSelecionado.startTime || 0} poster={itemSelecionado.poster} />}
 
           {filmeDetalhes && filmeDetalhes.info ? (
             <div style={{ backgroundColor: '#222', padding: '30px', borderRadius: '8px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>

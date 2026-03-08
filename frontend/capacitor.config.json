@@ -1,20 +1,21 @@
 {
-  "appId": "com.tecnopriv.boxiptv",
-  "appName": "BoxIPTV Pro",
+  "appId": "com.seuapp.iptv",
+  "appName": "BoxIPTV",
   "webDir": "dist",
   "bundledWebRuntime": false,
-  "server": {
-    "cleartext": true,
-    "androidScheme": "http"
-  },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 2000,
+      "launchShowDuration": 3000,
       "launchAutoHide": true,
-      "backgroundColor": "#000000",
+      "backgroundColor": "#141414",
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP",
-      "showSpinner": false
+      "showSpinner": true,
+      "androidSpinnerStyle": "large",
+      "iosSpinnerStyle": "small",
+      "spinnerColor": "#e50914",
+      "splashFullScreen": true,
+      "splashImmersive": true
     }
   }
 }

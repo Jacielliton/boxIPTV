@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import mpegts from 'mpegts.js';
-import Hls from 'hls.js'; // NOVO: Importação do HLS
+import Hls from 'hls.js';
 import { Play, Pause, Maximize, ArrowLeft, Loader2 } from 'lucide-react';
 
-export default function Player({ channel, onClose, startTime }) {
+export default function Player({ channel, onClose, startTime, poster }) {
     const videoRef = useRef(null);
-    const playerRef = useRef(null); // Vai guardar a instância mpegts ou hls
+    const playerRef = useRef(null);
     const containerRef = useRef(null);
     
     const [isPlaying, setIsPlaying] = useState(true);
@@ -13,13 +13,21 @@ export default function Player({ channel, onClose, startTime }) {
     const [progresso, setProgresso] = useState(0);
     const [duracao, setDuracao] = useState(0);
     const [showControls, setShowControls] = useState(true);
+    const [erroPlayback, setErroPlayback] = useState(false);
     let timeoutRef = useRef(null);
 
     if (!channel || !channel.url) return null;
 
-    // LÓGICA INTELIGENTE DE DETEÇÃO DE FORMATOS
-    const isVod = channel.url.toLowerCase().includes('.mp4') || channel.url.toLowerCase().includes('.mkv') || channel.url.toLowerCase().includes('.avi');
-    const isHls = channel.url.toLowerCase().includes('.m3u8'); // NOVO: Deteção de HLS
+    let finalUrl = channel.url.trim();
+    
+    const hasExtension = /\.[a-z0-9]{2,5}$/i.test(finalUrl);
+    if (!hasExtension) {
+        finalUrl = `${finalUrl}.m3u8`;
+    }
+
+    const isVod = finalUrl.toLowerCase().includes('.mp4') || finalUrl.toLowerCase().includes('.mkv') || finalUrl.toLowerCase().includes('.avi');
+    const isHls = finalUrl.toLowerCase().includes('.m3u8');
+    const isMkv = finalUrl.toLowerCase().includes('.mkv');
 
     const toggleTelaCheia = () => {
         if (!document.fullscreenElement) {
@@ -44,14 +52,14 @@ export default function Player({ channel, onClose, startTime }) {
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
             if (isPlaying) setShowControls(false);
-        }, 3000);
+        }, 4000); 
     };
 
-    // Atalhos de Teclado
     useEffect(() => {
         const handleKeyDown = (e) => {
             resetControlsTimeout();
             switch(e.key.toLowerCase()) {
+                case 'enter': 
                 case ' ':
                 case 'k':
                     e.preventDefault();
@@ -68,6 +76,8 @@ export default function Player({ channel, onClose, startTime }) {
                     if (videoRef.current && isVod) videoRef.current.currentTime -= 10;
                     break;
                 case 'escape':
+                case 'backspace': 
+                    e.preventDefault();
                     fecharPlayer();
                     break;
                 default:
@@ -81,9 +91,7 @@ export default function Player({ channel, onClose, startTime }) {
     useEffect(() => {
         const handleFullscreenChange = () => {
             if (!document.fullscreenElement && !document.webkitIsFullScreen) {
-                const tempoAtual = videoRef.current ? videoRef.current.currentTime : 0;
-                const durTotal = videoRef.current ? videoRef.current.duration : 0;
-                if (onClose) onClose(tempoAtual, durTotal);
+                fecharPlayer();
             }
         };
         document.addEventListener('fullscreenchange', handleFullscreenChange);
@@ -95,65 +103,99 @@ export default function Player({ channel, onClose, startTime }) {
         };
     }, [onClose]);
 
-    // MÁGICA DO LEITOR: Decide qual motor usar baseado no link
     useEffect(() => {
         setIsBuffering(true); 
+        setErroPlayback(false);
         
-        // Função para limpar instâncias anteriores
         const destroyPlayer = () => {
             if (playerRef.current) {
-                if (typeof playerRef.current.destroy === 'function') {
-                    playerRef.current.destroy(); // Limpa hls.js e mpegts.js
-                }
+                if (typeof playerRef.current.destroy === 'function') playerRef.current.destroy();
                 playerRef.current = null;
             }
         };
 
+        const onVideoError = () => {
+            if (!videoRef.current?.error) return; // Ignora falsos positivos nativos
+            console.error("Erro nativo de vídeo:", videoRef.current?.error);
+            setIsBuffering(false);
+            setErroPlayback(true);
+        };
+
+        if (videoRef.current) {
+            videoRef.current.addEventListener('error', onVideoError);
+        }
+
         if (isVod) {
             destroyPlayer();
-            videoRef.current.src = channel.url;
-            videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+            videoRef.current.src = finalUrl;
+            videoRef.current.play()
+                .then(() => setIsPlaying(true))
+                .catch(e => {
+                    // MÁGICA: Ignora o AbortError causado por carregamento duplo rápido do React
+                    if (e.name === 'AbortError') return;
+                    
+                    console.error("Erro ao reproduzir VOD:", e);
+                    setIsBuffering(false);
+                    setErroPlayback(true);
+                });
             
         } else if (isHls) {
-            // NOVO: MOTOR HLS (.m3u8)
             destroyPlayer();
             if (Hls.isSupported()) {
-                const hls = new Hls({ maxBufferLength: 30, maxMaxBufferLength: 60 });
+                const hls = new Hls({ 
+                    maxBufferLength: 30, 
+                    maxMaxBufferLength: 60,
+                    enableWorker: true,
+                    lowLatencyMode: false 
+                });
                 playerRef.current = hls;
-                hls.loadSource(channel.url);
+                hls.loadSource(finalUrl);
                 hls.attachMedia(videoRef.current);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+                    videoRef.current.play()
+                        .then(() => setIsPlaying(true))
+                        .catch(e => { if (e.name !== 'AbortError') console.log(e); });
                 });
                 hls.on(Hls.Events.ERROR, function (event, data) {
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.log("HLS Network Error, recovering...");
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.log("HLS Media Error, recovering...");
                                 hls.recoverMediaError();
                                 break;
                             default:
                                 destroyPlayer();
+                                setIsBuffering(false);
+                                setErroPlayback(true);
                                 break;
                         }
                     }
                 });
             } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
-                // Suporte nativo para Apple/Safari
-                videoRef.current.src = channel.url;
-                videoRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+                videoRef.current.src = finalUrl;
+                videoRef.current.play()
+                    .then(() => setIsPlaying(true))
+                    .catch(e => { if (e.name !== 'AbortError') console.log(e); });
             }
             
         } else {
-            // MOTOR MPEG-TS (.ts / TV Ao Vivo Clássico)
             if (mpegts.getFeatureList().mseLivePlayback) {
                 destroyPlayer();
-                playerRef.current = mpegts.createPlayer({ type: 'mse', isLive: true, url: channel.url });
+                playerRef.current = mpegts.createPlayer({ type: 'mse', isLive: true, url: finalUrl });
                 playerRef.current.attachMediaElement(videoRef.current);
                 playerRef.current.load();
-                playerRef.current.play().then(() => setIsPlaying(true)).catch(e => console.log(e));
+                playerRef.current.play()
+                    .then(() => setIsPlaying(true))
+                    .catch(e => {
+                        // MÁGICA: Ignora o AbortError no mpegts também
+                        if (e && e.name === 'AbortError') return;
+                        setIsBuffering(false);
+                        setErroPlayback(true);
+                    });
             }
         }
 
@@ -161,14 +203,20 @@ export default function Player({ channel, onClose, startTime }) {
 
         return () => {
             destroyPlayer();
+            if (videoRef.current) videoRef.current.removeEventListener('error', onVideoError);
         };
-    }, [channel]);
+    }, [finalUrl]);
 
-    const togglePlay = () => {
+    const togglePlay = (e) => {
+        if (e) e.stopPropagation();
         if (!videoRef.current) return;
         if (videoRef.current.paused) {
-            videoRef.current.play();
-            setIsPlaying(true);
+            videoRef.current.play()
+                .then(() => {
+                    setIsPlaying(true);
+                    resetControlsTimeout();
+                })
+                .catch(e => { if (e.name !== 'AbortError') console.log(e); });
         } else {
             videoRef.current.pause();
             setIsPlaying(false);
@@ -182,9 +230,11 @@ export default function Player({ channel, onClose, startTime }) {
     };
 
     const handleSeek = (e) => {
+        e.stopPropagation();
         const time = (e.target.value / 100) * duracao;
         videoRef.current.currentTime = time;
         setProgresso(time);
+        resetControlsTimeout();
     };
 
     const formatTime = (time) => {
@@ -201,22 +251,35 @@ export default function Player({ channel, onClose, startTime }) {
             ref={containerRef} 
             onMouseMove={resetControlsTimeout}
             onClick={resetControlsTimeout}
+            tabIndex={0}
+            className="tv-focusable" 
             style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' }}
         >
             <video 
                 ref={videoRef} 
+                poster={poster}
                 onTimeUpdate={handleTimeUpdate}
                 onLoadedMetadata={() => { if (startTime > 0) videoRef.current.currentTime = startTime; }}
                 onClick={togglePlay}
                 onDoubleClick={toggleTelaCheia} 
                 onWaiting={() => setIsBuffering(true)} 
-                onPlaying={() => setIsBuffering(false)} 
+                onPlaying={() => { setIsBuffering(false); setErroPlayback(false); }} 
                 referrerPolicy="no-referrer" 
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }} 
             />
 
-            {isBuffering && (
-                <div style={{ position: 'absolute', pointerEvents: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+            {erroPlayback && (
+                <div style={{ position: 'absolute', backgroundColor: 'rgba(0,0,0,0.8)', padding: '20px', borderRadius: '8px', textAlign: 'center', maxWidth: '400px', zIndex: 10 }}>
+                    <p style={{ color: '#ff4444', fontWeight: 'bold', fontSize: '18px', marginBottom: '10px' }}>Erro de Reprodução</p>
+                    <p style={{ color: 'white', fontSize: '14px' }}>
+                        {isMkv ? "O reprodutor da sua TV Box pode não suportar o codec deste arquivo MKV nativamente." : "Não foi possível carregar este canal. Tente novamente ou escolha outro."}
+                    </p>
+                    <button onClick={fecharPlayer} style={{ marginTop: '15px', padding: '10px 20px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>Sair</button>
+                </div>
+            )}
+
+            {isBuffering && !erroPlayback && (
+                <div style={{ position: 'absolute', pointerEvents: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 5 }}>
                     <Loader2 size={60} color="#e50914" className="animate-spin" />
                 </div>
             )}
@@ -225,18 +288,18 @@ export default function Player({ channel, onClose, startTime }) {
                 position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none',
                 background: showControls ? 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.9) 100%)' : 'none',
                 opacity: showControls ? 1 : 0, transition: 'opacity 0.3s ease-in-out',
-                display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '30px'
+                display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '30px', zIndex: 6
             }}>
                 
                 <div style={{ display: 'flex', alignItems: 'center', pointerEvents: showControls ? 'auto' : 'none' }}>
-                    <button className="tv-focusable" onClick={fecharPlayer} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                    <button tabIndex={0} onClick={fecharPlayer} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '10px', fontSize: '20px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
                         <ArrowLeft size={30} /> {channel.nome}
                     </button>
                 </div>
 
                 <div style={{ width: '100%', pointerEvents: showControls ? 'auto' : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px', color: 'white', fontWeight: 'bold' }}>
-                        <button className="tv-focusable" onClick={togglePlay} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
+                        <button tabIndex={0} onClick={togglePlay} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}>
                             {isPlaying ? <Pause size={35} fill="currentColor" /> : <Play size={35} fill="currentColor" />}
                         </button>
                         
@@ -259,7 +322,7 @@ export default function Player({ channel, onClose, startTime }) {
                             </div>
                         )}
                         
-                        <button className="tv-focusable" onClick={toggleTelaCheia} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginLeft: '10px' }}>
+                        <button tabIndex={0} onClick={toggleTelaCheia} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', marginLeft: '10px' }}>
                             <Maximize size={25} />
                         </button>
                     </div>
