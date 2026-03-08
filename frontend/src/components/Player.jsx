@@ -4,10 +4,11 @@ import mpegts from 'mpegts.js';
 import Hls from 'hls.js';
 import { Play, Pause, Maximize, ArrowLeft, Loader2 } from 'lucide-react';
 
-export default function Player({ channel, onClose, startTime, poster }) {
+export default function Player({ channel, onClose, startTime, poster, onPlayNext }) {
     const videoRef = useRef(null);
     const playerRef = useRef(null);
     const containerRef = useRef(null);
+    const btnNextRef = useRef(null);
     
     const [isPlaying, setIsPlaying] = useState(true);
     const [isBuffering, setIsBuffering] = useState(true);
@@ -15,16 +16,13 @@ export default function Player({ channel, onClose, startTime, poster }) {
     const [duracao, setDuracao] = useState(0);
     const [showControls, setShowControls] = useState(true);
     const [erroPlayback, setErroPlayback] = useState(false);
+    const [showNextEp, setShowNextEp] = useState(false);
     let timeoutRef = useRef(null);
 
     if (!channel || !channel.url) return null;
 
+    // A URL VEM PURA, SEM FORÇAR EXTENSÕES
     let finalUrl = channel.url.trim();
-    
-    const hasExtension = /\.[a-z0-9]{2,5}$/i.test(finalUrl);
-    if (!hasExtension) {
-        finalUrl = `${finalUrl}.m3u8`;
-    }
 
     const isVod = finalUrl.toLowerCase().includes('.mp4') || finalUrl.toLowerCase().includes('.mkv') || finalUrl.toLowerCase().includes('.avi');
     const isHls = finalUrl.toLowerCase().includes('.m3u8');
@@ -49,12 +47,20 @@ export default function Player({ channel, onClose, startTime, poster }) {
     };
 
     useEffect(() => {
-        const backListener = CapacitorApp.addListener('backButton', () => {
-            fecharPlayer(); 
-        });
+        if (containerRef.current) containerRef.current.focus();
+
+        let listenerHandler = null;
+        const setupListener = async () => {
+            listenerHandler = await CapacitorApp.addListener('backButton', () => {
+                fecharPlayer(); 
+            });
+        };
+        setupListener();
         
         return () => {
-            backListener.then(listener => listener.remove());
+            if (listenerHandler) {
+                listenerHandler.remove();
+            }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -67,6 +73,13 @@ export default function Player({ channel, onClose, startTime, poster }) {
         }, 4000); 
     };
 
+    // Foca automaticamente no botão de próximo episódio quando ele aparecer
+    useEffect(() => {
+        if (showNextEp && btnNextRef.current) {
+            btnNextRef.current.focus();
+        }
+    }, [showNextEp]);
+
     useEffect(() => {
         const handleKeyDown = (e) => {
             resetControlsTimeout();
@@ -74,8 +87,11 @@ export default function Player({ channel, onClose, startTime, poster }) {
                 case 'enter': 
                 case ' ':
                 case 'k':
-                    e.preventDefault();
-                    togglePlay();
+                    // Não dar toggle play se o foco estiver no botão de próximo episódio
+                    if (document.activeElement !== btnNextRef.current) {
+                        e.preventDefault();
+                        togglePlay();
+                    }
                     break;
                 case 'f':
                     e.preventDefault();
@@ -118,6 +134,7 @@ export default function Player({ channel, onClose, startTime, poster }) {
     useEffect(() => {
         setIsBuffering(true); 
         setErroPlayback(false);
+        setShowNextEp(false);
         
         const destroyPlayer = () => {
             if (playerRef.current) {
@@ -127,7 +144,7 @@ export default function Player({ channel, onClose, startTime, poster }) {
         };
 
         const onVideoError = () => {
-            if (!videoRef.current?.error) return; // Ignora falsos positivos nativos
+            if (!videoRef.current?.error) return; 
             console.error("Erro nativo de vídeo:", videoRef.current?.error);
             setIsBuffering(false);
             setErroPlayback(true);
@@ -137,46 +154,62 @@ export default function Player({ channel, onClose, startTime, poster }) {
             videoRef.current.addEventListener('error', onVideoError);
         }
 
+        const tentarPlay = () => {
+            if (!videoRef.current) return;
+            const playPromise = videoRef.current.play();
+            
+            if (playPromise !== undefined) {
+                playPromise
+                    .then(() => setIsPlaying(true))
+                    .catch(e => {
+                        if (e.name === 'AbortError') {
+                            setTimeout(() => {
+                                if (videoRef.current) {
+                                    videoRef.current.play()
+                                        .then(() => setIsPlaying(true))
+                                        .catch(() => setIsPlaying(false));
+                                }
+                            }, 300);
+                            return;
+                        }
+                        console.error("Erro ao reproduzir:", e);
+                        if (e.name !== 'NotAllowedError') {
+                            setIsBuffering(false);
+                            setErroPlayback(true);
+                        } else {
+                            setIsBuffering(false);
+                            setIsPlaying(false);
+                        }
+                    });
+            }
+        };
+
         if (isVod) {
             destroyPlayer();
             videoRef.current.src = finalUrl;
-            videoRef.current.play()
-                .then(() => setIsPlaying(true))
-                .catch(e => {
-                    // MÁGICA: Ignora o AbortError causado por carregamento duplo rápido do React
-                    if (e.name === 'AbortError') return;
-                    
-                    console.error("Erro ao reproduzir VOD:", e);
-                    setIsBuffering(false);
-                    setErroPlayback(true);
-                });
+            videoRef.current.load(); // Força carregamento
+            tentarPlay();
             
         } else if (isHls) {
             destroyPlayer();
             if (Hls.isSupported()) {
                 const hls = new Hls({ 
-                    maxBufferLength: 30, 
-                    maxMaxBufferLength: 60,
-                    enableWorker: true,
-                    lowLatencyMode: false 
+                    maxBufferLength: 30, maxMaxBufferLength: 60,
+                    enableWorker: true, lowLatencyMode: false 
                 });
                 playerRef.current = hls;
                 hls.loadSource(finalUrl);
                 hls.attachMedia(videoRef.current);
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                    videoRef.current.play()
-                        .then(() => setIsPlaying(true))
-                        .catch(e => { if (e.name !== 'AbortError') console.log(e); });
+                    tentarPlay();
                 });
                 hls.on(Hls.Events.ERROR, function (event, data) {
                     if (data.fatal) {
                         switch (data.type) {
                             case Hls.ErrorTypes.NETWORK_ERROR:
-                                console.log("HLS Network Error, recovering...");
                                 hls.startLoad();
                                 break;
                             case Hls.ErrorTypes.MEDIA_ERROR:
-                                console.log("HLS Media Error, recovering...");
                                 hls.recoverMediaError();
                                 break;
                             default:
@@ -189,25 +222,16 @@ export default function Player({ channel, onClose, startTime, poster }) {
                 });
             } else if (videoRef.current.canPlayType('application/vnd.apple.mpegurl')) {
                 videoRef.current.src = finalUrl;
-                videoRef.current.play()
-                    .then(() => setIsPlaying(true))
-                    .catch(e => { if (e.name !== 'AbortError') console.log(e); });
+                tentarPlay();
             }
             
         } else {
             if (mpegts.getFeatureList().mseLivePlayback) {
                 destroyPlayer();
-                playerRef.current = mpegts.createPlayer({ type: 'mse', isLive: true, url: finalUrl });
+                playerRef.current = mpegts.createPlayer({ type: 'mpegts', isLive: true, url: finalUrl });
                 playerRef.current.attachMediaElement(videoRef.current);
                 playerRef.current.load();
-                playerRef.current.play()
-                    .then(() => setIsPlaying(true))
-                    .catch(e => {
-                        // MÁGICA: Ignora o AbortError no mpegts também
-                        if (e && e.name === 'AbortError') return;
-                        setIsBuffering(false);
-                        setErroPlayback(true);
-                    });
+                tentarPlay();
             }
         }
 
@@ -217,6 +241,7 @@ export default function Player({ channel, onClose, startTime, poster }) {
             destroyPlayer();
             if (videoRef.current) videoRef.current.removeEventListener('error', onVideoError);
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [finalUrl]);
 
     const togglePlay = (e) => {
@@ -237,8 +262,27 @@ export default function Player({ channel, onClose, startTime, poster }) {
     };
 
     const handleTimeUpdate = () => {
-        setProgresso(videoRef.current.currentTime);
-        setDuracao(videoRef.current.duration);
+        if (!videoRef.current) return;
+        const atual = videoRef.current.currentTime;
+        const total = videoRef.current.duration;
+        setProgresso(atual);
+        setDuracao(total);
+
+        // Lógica de aparecer o botão faltando 20 segundos
+        if (channel.proximoEpisodio && total > 0 && (total - atual) <= 20) {
+            setShowNextEp(true);
+        } else {
+            setShowNextEp(false);
+        }
+    };
+
+    const handleVideoEnded = () => {
+        // Avança automaticamente quando o vídeo chega ao fim
+        if (channel.proximoEpisodio && onPlayNext) {
+            onPlayNext();
+        } else {
+            fecharPlayer();
+        }
     };
 
     const handleSeek = (e) => {
@@ -258,6 +302,19 @@ export default function Player({ channel, onClose, startTime, poster }) {
         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
+    // Função interna para o onLoadedMetadata
+    const handleLoadedMetadata = () => {
+        if (startTime > 0 && videoRef.current) {
+            videoRef.current.currentTime = startTime; 
+        }
+        if (videoRef.current && videoRef.current.paused) {
+            const playPromise = videoRef.current.play();
+            if (playPromise !== undefined) {
+                playPromise.then(() => setIsPlaying(true)).catch(() => {});
+            }
+        }
+    };
+
     return (
         <div 
             ref={containerRef} 
@@ -267,17 +324,17 @@ export default function Player({ channel, onClose, startTime, poster }) {
             className="tv-focusable" 
             style={{ 
                 position: 'fixed', top: 0, left: 0, 
-                /* VOLTAMOS PARA 100% PARA O VÍDEO APARECER NA TV BOX: */
-                width: '100%', 
-                height: '100%', 
+                width: '100%', height: '100%', 
                 background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' 
             }}
         >
             <video 
                 ref={videoRef}
+                autoPlay
                 poster={poster}
                 onTimeUpdate={handleTimeUpdate}
-                onLoadedMetadata={() => { if (startTime > 0) videoRef.current.currentTime = startTime; }}
+                onLoadedMetadata={handleLoadedMetadata}
+                onEnded={handleVideoEnded}
                 onClick={togglePlay}
                 onDoubleClick={toggleTelaCheia} 
                 onWaiting={() => setIsBuffering(true)} 
@@ -285,6 +342,40 @@ export default function Player({ channel, onClose, startTime, poster }) {
                 referrerPolicy="no-referrer" 
                 style={{ width: '100%', height: '100%', objectFit: 'contain', minWidth: '100vw', minHeight: '100vh' }} 
             />
+
+            {/* BOTÃO DE PRÓXIMO EPISÓDIO */}
+            {showNextEp && channel.proximoEpisodio && (
+                <div style={{ position: 'absolute', bottom: showControls ? '130px' : '40px', right: '40px', zIndex: 20, transition: 'bottom 0.3s ease-in-out' }}>
+                    <button
+                        ref={btnNextRef}
+                        tabIndex={0}
+                        className="tv-focusable"
+                        onClick={(e) => { e.stopPropagation(); onPlayNext(); }}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                onPlayNext();
+                            }
+                        }}
+                        style={{
+                            display: 'flex', alignItems: 'center', gap: '10px',
+                            padding: '15px 25px', backgroundColor: 'rgba(20, 20, 20, 0.9)', 
+                            color: 'white', border: '2px solid #e50914', borderRadius: '8px', 
+                            cursor: 'pointer', fontSize: '18px', fontWeight: 'bold', 
+                            boxShadow: '0 10px 20px rgba(0,0,0,0.8)'
+                        }}
+                    >
+                        Próximo Episódio <Play size={20} fill="#e50914" />
+                    </button>
+                </div>
+            )}
+
+            {!isPlaying && !isBuffering && !erroPlayback && (
+                <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 7, pointerEvents: 'none' }}>
+                    <Play size={80} color="rgba(255,255,255,0.7)" fill="currentColor" />
+                </div>
+            )}
 
             {erroPlayback && (
                 <div style={{ position: 'absolute', backgroundColor: 'rgba(0,0,0,0.8)', padding: '20px', borderRadius: '8px', textAlign: 'center', maxWidth: '400px', zIndex: 10 }}>

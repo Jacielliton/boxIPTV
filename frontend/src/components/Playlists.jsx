@@ -1,13 +1,19 @@
 import { useState, useEffect } from 'react';
-import { Trash2, Plus, LogOut, Monitor, User, Globe, Calendar, RefreshCw, Settings } from 'lucide-react';
+import { Trash2, Plus, LogOut, Monitor, User, Globe, Calendar, RefreshCw, Settings, DownloadCloud, X } from 'lucide-react';
 import AdminPanel from './AdminPanel'; // Importa o painel de administração
+
+// =========================================================
+// DEFINA AQUI A VERSÃO ATUAL DO SEU APLICATIVO
+// Lembre-se de mudar isso antes de compilar um novo APK
+// =========================================================
+const VERSAO_ATUAL = "1.0.0"; 
 
 export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsuario }) {
   const [playlists, setPlaylists] = useState([]);
   const [carregando, setCarregando] = useState(true);
   
   const [mostrarForm, setMostrarForm] = useState(false);
-  const [mostrarAdmin, setMostrarAdmin] = useState(false); // NOVO: Estado para abrir o painel admin
+  const [mostrarAdmin, setMostrarAdmin] = useState(false);
 
   const [nome, setNome] = useState('');
   const [serverUrl, setServerUrl] = useState('');
@@ -15,10 +21,52 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
   const [iptvPass, setIptvPass] = useState('');
   const [erro, setErro] = useState('');
 
+  // ESTADOS DA ATUALIZAÇÃO
+  const [atualizacaoDisponivel, setAtualizacaoDisponivel] = useState(null);
+  const [fecharAvisoAtualizacao, setFecharAvisoAtualizacao] = useState(false);
+
+  // =========================================================
+  // SISTEMA DE VERIFICAÇÃO DE ATUALIZAÇÕES AUTOMÁTICAS
+  // =========================================================
+  useEffect(() => {
+    // Função para comparar versões de forma segura (ex: "1.0.1" > "1.0.0")
+    const isNovaVersao = (versaoServer, versaoAtual) => {
+      if (!versaoServer) return false;
+      const v1 = String(versaoServer).split('.').map(Number);
+      const v2 = String(versaoAtual).split('.').map(Number);
+      for (let i = 0; i < Math.max(v1.length, v2.length); i++) {
+        const num1 = v1[i] || 0;
+        const num2 = v2[i] || 0;
+        if (num1 > num2) return true;
+        if (num1 < num2) return false;
+      }
+      return false;
+    };
+
+    const verificarAtualizacao = async () => {
+      try {
+        const resposta = await fetch('/api/versao_apk');
+        
+        if (resposta.ok) {
+          const dados = await resposta.json();
+          // Se a versão recebida da API for maior que a VERSAO_ATUAL, libera o aviso
+          if (dados.versao && isNovaVersao(dados.versao, VERSAO_ATUAL)) {
+            setAtualizacaoDisponivel(dados);
+          }
+        }
+      } catch (error) {
+        // Ignora erros silenciosamente (evita popup de erro se a internet oscilar ou o server reiniciar)
+        console.log("A verificação de atualização falhou silenciosamente:", error);
+      }
+    };
+
+    verificarAtualizacao();
+  }, []);
+
   const carregarPlaylists = async () => {
     setCarregando(true);
     try {
-      const response = await fetch('http://72.60.3.89:8006/api/playlists', {
+      const response = await fetch('/api/playlists', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -40,6 +88,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
 
   useEffect(() => {
     carregarPlaylists();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   const handleAdicionarPlaylist = async (e) => {
@@ -51,7 +100,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
     }
 
     try {
-      const response = await fetch('http://72.60.3.89:8006/api/playlists', {
+      const response = await fetch('/api/playlists', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -79,7 +128,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
     if (!window.confirm("Deseja realmente remover esta lista?")) return;
 
     try {
-      const response = await fetch(`http://72.60.3.89:8006/api/playlists/${id}`, {
+      const response = await fetch(`/api/playlists/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -94,7 +143,6 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
     return new Date(data).toLocaleDateString('pt-BR');
   };
 
-  // Se o botão Admin for clicado, renderiza apenas o Painel Admin
   if (mostrarAdmin) {
     return <AdminPanel token={token} onVoltar={() => setMostrarAdmin(false)} />;
   }
@@ -102,6 +150,44 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
   return (
     <div style={{ padding: '20px', backgroundColor: '#141414', minHeight: '100vh', color: 'white', fontFamily: 'sans-serif' }}>
       
+      {/* ========================================================= */}
+      {/* NOTIFICAÇÃO DE ATUALIZAÇÃO DISPONÍVEL                       */}
+      {/* ========================================================= */}
+      {atualizacaoDisponivel && !fecharAvisoAtualizacao && (
+        <div style={{ 
+          maxWidth: '1000px', margin: '0 auto 20px auto', backgroundColor: '#0056b3', 
+          borderRadius: '12px', padding: '15px 20px', display: 'flex', 
+          justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 15px rgba(0, 86, 179, 0.4)',
+          border: '1px solid #007bff', flexWrap: 'wrap', gap: '15px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+            <div style={{ backgroundColor: 'white', padding: '10px', borderRadius: '50%', color: '#0056b3' }}>
+              <DownloadCloud size={24} />
+            </div>
+            <div>
+              <h3 style={{ margin: '0 0 5px 0', fontSize: '16px', color: 'white' }}>Nova Atualização Disponível (v{atualizacaoDisponivel.versao})</h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#cce5ff' }}>{atualizacaoDisponivel.notas || "Baixe a nova versão para ter acesso a novos recursos e mais estabilidade."}</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button 
+              className="tv-focusable" 
+              onClick={() => window.location.href = atualizacaoDisponivel.link || "http://tecnopriv.top"} 
+              style={{ padding: '10px 20px', backgroundColor: 'white', color: '#0056b3', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
+            >
+              Baixar Agora
+            </button>
+            <button 
+              className="tv-focusable" 
+              onClick={() => setFecharAvisoAtualizacao(true)} 
+              style={{ background: 'transparent', border: 'none', color: '#cce5ff', cursor: 'pointer', padding: '10px' }}
+            >
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* HEADER COM INFO DO USUÁRIO */}
       <div style={{ 
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', 
@@ -156,14 +242,14 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
             {playlists.map(pl => (
             <div 
               key={pl.id} 
-              style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }} // Container flexível
+              style={{ display: 'flex', gap: '10px', alignItems: 'stretch' }} 
             >
               {/* ÁREA DA PLAYLIST (FOCO PRINCIPAL) */}
               <div 
                 className="tv-focusable" 
                 tabIndex={0}
                 onClick={() => onSelectPlaylist(pl)} 
-                onKeyDown={(e) => { if(e.key === 'Enter') onSelectPlaylist(pl) }} // Suporte ao controle
+                onKeyDown={(e) => { if(e.key === 'Enter') onSelectPlaylist(pl) }} 
                 style={{ flex: 1, backgroundColor: '#1f1f1f', padding: '25px', borderRadius: '12px', cursor: 'pointer', border: '1px solid #333', transition: '0.3s' }}
               >
                 <h3 style={{ margin: '0 0 15px 0', color: '#fff', fontSize: '20px', display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -180,7 +266,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
                   className="tv-focusable"
                   tabIndex={0}
                   onClick={(e) => handleDeletarPlaylist(e, pl.id)}
-                  onKeyDown={(e) => { if(e.key === 'Enter') handleDeletarPlaylist(e, pl.id) }} // Suporte ao controle
+                  onKeyDown={(e) => { if(e.key === 'Enter') handleDeletarPlaylist(e, pl.id) }} 
                   style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#1f1f1f', border: '1px solid #333', color: '#ff4444', padding: '0 20px', borderRadius: '12px', cursor: 'pointer' }}
                   title="Remover Lista"
               >

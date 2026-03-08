@@ -33,7 +33,7 @@ export default function Login({ onLogin }) {
     setCarregando(true);
 
     try {
-      const url = modoLogin ? 'http://72.60.3.89:8006/api/login' : 'http://72.60.3.89:8006/api/register';
+      const url = modoLogin ? '/api/login' : '/api/register';
       
       const response = await fetch(url, {
         method: 'POST',
@@ -80,6 +80,7 @@ export default function Login({ onLogin }) {
         width: '100%', maxWidth: '400px', boxShadow: '0 15px 35px rgba(0,0,0,0.8)',
         border: '1px solid #333', backdropFilter: 'blur(10px)'
       }}>
+        
         
         <div style={{ textAlign: 'center', marginBottom: '30px' }}>
             <MonitorPlay size={48} color="#e50914" style={{ marginBottom: '10px' }} />
@@ -182,33 +183,6 @@ export default function Login({ onLogin }) {
           </button>
         </div>
       </form>
-
-      {/* LINK DE DOWNLOAD DO APLICATIVO ANDROID */}
-      <div style={{ marginTop: '30px', textAlign: 'center' }}>
-        <a 
-          href="http://tecnopriv.top/download/iptv/BOXIPTV_PRO_3.0.apk" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="tv-focusable"
-          style={{ 
-            display: 'inline-flex', 
-            alignItems: 'center', 
-            gap: '8px', 
-            color: '#aaa', 
-            textDecoration: 'none', 
-            fontSize: '15px',
-            padding: '10px 20px',
-            borderRadius: '20px',
-            border: '1px solid #333',
-            background: 'rgba(20, 20, 20, 0.6)',
-            transition: 'all 0.3s ease'
-          }}
-          onMouseEnter={(e) => { e.currentTarget.style.color = 'white'; e.currentTarget.style.borderColor = '#e50914'; e.currentTarget.style.background = 'rgba(229, 9, 20, 0.1)'; }}
-          onMouseLeave={(e) => { e.currentTarget.style.color = '#aaa'; e.currentTarget.style.borderColor = '#333'; e.currentTarget.style.background = 'rgba(20, 20, 20, 0.6)'; }}
-        >
-          <Download size={18} /> Baixar App Android
-        </a>
-      </div>
 
     </div>
   );

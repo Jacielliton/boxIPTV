@@ -1,12 +1,17 @@
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, File, UploadFile, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from datetime import datetime, timedelta
 import jwt
 import bcrypt
 import uvicorn
+import os
+import json
+import shutil
+
 
 # Importações do seu banco de dados
 import models
@@ -16,6 +21,16 @@ from database import engine, get_db
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="BoxIPTV Pro - Backend Core")
+
+# Cria a pasta 'uploads' se não existir
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+# Diz ao FastAPI para servir os arquivos desta pasta publicamente
+app.mount("/download", StaticFiles(directory=UPLOAD_DIR), name="download")
+
+# Arquivo JSON que vai guardar a versão atual dinamicamente
+VERSION_FILE = "versao_apk.json"
 
 app.add_middleware(
     CORSMiddleware,
@@ -221,6 +236,49 @@ def admin_remover_playlist(playlist_id: int, admin: models.User = Depends(get_cu
     db.delete(playlist)
     db.commit()
     return {"message": "Playlist removida."}
+# ==========================================
+# ROTA DE ATUALIZAÇÃO DO APK (DINÂMICA)
+# ==========================================
 
+@app.post("/api/admin/upload_apk", tags=["Admin"])
+def admin_upload_apk(
+    version: str = Form(...),
+    notes: str = Form(...),
+    file: UploadFile = File(...),
+    admin: models.User = Depends(get_current_admin)
+):
+    # Salva o arquivo APK na pasta uploads da VPS
+    file_location = os.path.join(UPLOAD_DIR, "BOXIPTV_PRO.apk")
+    with open(file_location, "wb+") as file_object:
+        shutil.copyfileobj(file.file, file_object)
+    
+    # Gera o link dinâmico usando o IP do seu servidor
+    download_link = f"http://72.60.3.89:8006/download/BOXIPTV_PRO.apk"
+    
+    # Salva os dados da nova versão no arquivo JSON
+    update_data = {
+        "versao": version,
+        "link": download_link,
+        "notas": notes
+    }
+    with open(VERSION_FILE, "w", encoding="utf-8") as f:
+        json.dump(update_data, f)
+        
+    return {"message": "APK atualizado e publicado com sucesso!"}
+
+@app.get("/api/versao_apk", tags=["Sistema"])
+def checar_versao():
+    # Lê o arquivo JSON com a versão salva pelo painel Admin
+    if os.path.exists(VERSION_FILE):
+        with open(VERSION_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    
+    # Se ainda não houver upload, retorna dados vazios para não disparar alerta
+    return {
+        "versao": "1.0.0",
+        "link": "",
+        "notas": ""
+    }
+    
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=8006, reload=True)

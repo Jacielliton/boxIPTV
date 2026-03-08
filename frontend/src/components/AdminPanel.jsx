@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { 
   UserCheck, UserX, Plus, Search, Users, Activity, AlertCircle, 
-  Trash2, Settings, List, Edit, Save, X 
+  Trash2, Settings, List, Edit, Save, X, UploadCloud, Download
 } from 'lucide-react';
 
 const estiloInput = {
@@ -19,10 +19,15 @@ export default function AdminPanel({ token, onVoltar }) {
   const [usuarioSelecionado, setUsuarioSelecionado] = useState(null);
   const [playlistsUsuario, setPlaylistsUsuario] = useState([]);
   const [editandoPlaylist, setEditandoPlaylist] = useState(null);
-  
-  // NOVO: Estados para criar uma Playlist Nova
   const [mostrarFormNova, setMostrarFormNova] = useState(false);
   const [novaPlaylist, setNovaPlaylist] = useState({ name: '', server_url: '', iptv_username: '', iptv_password: '' });
+
+  // ESTADOS PARA UPLOAD DE APK
+  const [mostrarModalApk, setMostrarModalApk] = useState(false);
+  const [apkVersao, setApkVersao] = useState('');
+  const [apkNotas, setApkNotas] = useState('');
+  const [apkArquivo, setApkArquivo] = useState(null);
+  const [fazendoUpload, setFazendoUpload] = useState(false);
 
   // ==========================================
   // FUNÇÕES DE UTILIZADORES
@@ -30,7 +35,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const carregarUsuarios = async () => {
     setCarregando(true);
     try {
-      const res = await fetch('http://72.60.3.89:8006/api/admin/users', {
+      const res = await fetch('/api/admin/users', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -52,7 +57,7 @@ export default function AdminPanel({ token, onVoltar }) {
     const dias = parseInt(diasInput[userId] || 0);
     if (dias <= 0 || isNaN(dias)) return;
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${userId}/premium`, {
+      const res = await fetch(`/api/admin/users/${userId}/premium`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ dias_adicionais: dias })
@@ -70,7 +75,7 @@ export default function AdminPanel({ token, onVoltar }) {
     const novoStatus = statusAtual === 'Ativo' ? 'Desabilitado' : 'Ativo';
     if (!window.confirm(`Tem certeza que deseja alterar o status para ${novoStatus}?`)) return;
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${userId}/status`, {
+      const res = await fetch(`/api/admin/users/${userId}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify({ status: novoStatus })
@@ -82,7 +87,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const handleApagarUsuario = async (userId, username) => {
     if (!window.confirm(`ATENÇÃO: Deseja apagar permanentemente o utilizador ${username || 'Desconhecido'} e todas as suas playlists?`)) return;
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${userId}`, {
+      const res = await fetch(`/api/admin/users/${userId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -100,9 +105,9 @@ export default function AdminPanel({ token, onVoltar }) {
   const abrirGerenciadorPlaylists = async (user) => {
     setUsuarioSelecionado(user);
     setEditandoPlaylist(null); 
-    setMostrarFormNova(false); // Reseta o form novo
+    setMostrarFormNova(false); 
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${user.id}/playlists`, {
+      const res = await fetch(`/api/admin/users/${user.id}/playlists`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -115,7 +120,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const deletarPlaylistAdmin = async (playlistId) => {
     if (!window.confirm("Remover esta playlist permanentemente?")) return;
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/playlists/${playlistId}`, {
+      const res = await fetch(`/api/admin/playlists/${playlistId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -141,7 +146,7 @@ export default function AdminPanel({ token, onVoltar }) {
   const salvarEdicaoPlaylist = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/playlists/${editandoPlaylist.id}`, {
+      const res = await fetch(`/api/admin/playlists/${editandoPlaylist.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(editandoPlaylist)
@@ -155,11 +160,10 @@ export default function AdminPanel({ token, onVoltar }) {
     } catch (e) {}
   };
 
-  // NOVO: Função para salvar playlist nova
   const salvarNovaPlaylist = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://72.60.3.89:8006/api/admin/users/${usuarioSelecionado.id}/playlists`, {
+      const res = await fetch(`/api/admin/users/${usuarioSelecionado.id}/playlists`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
         body: JSON.stringify(novaPlaylist)
@@ -167,11 +171,53 @@ export default function AdminPanel({ token, onVoltar }) {
       if (res.ok) {
         setMensagem({ tipo: 'sucesso', texto: 'Nova playlist adicionada ao cliente!' });
         setMostrarFormNova(false);
-        setNovaPlaylist({ name: '', server_url: '', iptv_username: '', iptv_password: '' }); // Limpa o formulário
+        setNovaPlaylist({ name: '', server_url: '', iptv_username: '', iptv_password: '' }); 
         abrirGerenciadorPlaylists(usuarioSelecionado);
         setTimeout(() => setMensagem({ tipo: '', texto: '' }), 3000);
       }
     } catch (e) {}
+  };
+
+  // ==========================================
+  // FUNÇÃO DE UPLOAD DE APK
+  // ==========================================
+  const handleUploadApk = async (e) => {
+    e.preventDefault();
+    if (!apkArquivo || !apkVersao) {
+        setMensagem({ tipo: 'erro', texto: 'Selecione o arquivo APK e digite a versão.' });
+        return;
+    }
+    
+    setFazendoUpload(true);
+    const formData = new FormData();
+    formData.append('version', apkVersao);
+    formData.append('notes', apkNotas);
+    formData.append('file', apkArquivo);
+
+    try {
+      const res = await fetch('/api/admin/upload_apk', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+          // Não coloque 'Content-Type' aqui. O fetch define automaticamente para multipart/form-data.
+        },
+        body: formData
+      });
+      
+      if (res.ok) {
+        setMensagem({ tipo: 'sucesso', texto: 'Nova versão publicada para todos os usuários!' });
+        setMostrarModalApk(false);
+        setApkArquivo(null); setApkVersao(''); setApkNotas('');
+        setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
+      } else {
+        throw new Error('Falha ao enviar o APK');
+      }
+    } catch(err) {
+      setMensagem({ tipo: 'erro', texto: err.message });
+      setTimeout(() => setMensagem({ tipo: '', texto: '' }), 5000);
+    } finally {
+      setFazendoUpload(false);
+    }
   };
 
   const formatarData = (dataString) => {
@@ -205,9 +251,14 @@ export default function AdminPanel({ token, onVoltar }) {
           </h1>
           <p style={{ color: '#aaa', margin: '5px 0 0 0' }}>Gestão de Contas e Playlists</p>
         </div>
-        <button className="tv-focusable" onClick={onVoltar} style={{ padding: '10px 20px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
-          ⬅ Voltar ao Início
-        </button>
+        <div style={{ display: 'flex', gap: '15px' }}>
+          <button className="tv-focusable" onClick={() => setMostrarModalApk(true)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 20px', backgroundColor: '#0056b3', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
+            <UploadCloud size={18} /> Publicar Atualização
+          </button>
+          <button className="tv-focusable" onClick={onVoltar} style={{ padding: '10px 20px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>
+            ⬅ Voltar ao Início
+          </button>
+        </div>
       </div>
 
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
@@ -371,13 +422,62 @@ export default function AdminPanel({ token, onVoltar }) {
       </div>
 
       {/* ========================================== */}
+      {/* MODAL: UPLOAD DE NOVA VERSÃO APK             */}
+      {/* ========================================== */}
+      {mostrarModalApk && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
+          <div style={{ background: '#222', width: '100%', maxWidth: '500px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #0056b3', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+            
+            <div style={{ padding: '20px', background: '#0056b3', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <UploadCloud size={20} /> Publicar Atualização
+              </h2>
+              <button className="tv-focusable" onClick={() => setMostrarModalApk(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={24} /></button>
+            </div>
+            
+            <form onSubmit={handleUploadApk} style={{ padding: '25px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <div>
+                <label style={{ color: '#aaa', fontSize: '14px', marginBottom: '8px', display: 'block' }}>Versão do Aplicativo (ex: 3.0.5)</label>
+                <input 
+                  type="text" value={apkVersao} onChange={e => setApkVersao(e.target.value)} 
+                  style={estiloInput} placeholder="1.0.0" required 
+                />
+              </div>
+
+              <div>
+                <label style={{ color: '#aaa', fontSize: '14px', marginBottom: '8px', display: 'block' }}>Arquivo APK</label>
+                <input 
+                  type="file" accept=".apk" onChange={e => setApkArquivo(e.target.files[0])} 
+                  style={{ ...estiloInput, padding: '8px' }} required 
+                />
+              </div>
+
+              <div>
+                <label style={{ color: '#aaa', fontSize: '14px', marginBottom: '8px', display: 'block' }}>Notas da Atualização</label>
+                <textarea 
+                  value={apkNotas} onChange={e => setApkNotas(e.target.value)} 
+                  style={{ ...estiloInput, minHeight: '80px', resize: 'vertical' }} 
+                  placeholder="Quais são as novidades desta versão?" 
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+                <button type="submit" disabled={fazendoUpload} className="tv-focusable" style={{ flex: 1, background: '#0056b3', border: 'none', color: 'white', padding: '14px', borderRadius: '5px', fontWeight: 'bold', cursor: fazendoUpload ? 'wait' : 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px' }}>
+                  {fazendoUpload ? 'A enviar ficheiro...' : <><Download size={18} /> Publicar Agora</>}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================== */}
       {/* MODAL: GERENCIADOR DE PLAYLISTS            */}
       {/* ========================================== */}
       {usuarioSelecionado && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '20px' }}>
           <div style={{ background: '#222', width: '100%', maxWidth: '600px', borderRadius: '12px', overflow: 'hidden', border: '1px solid #444', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
             
-            {/* CABEÇALHO DO MODAL COM BOTÃO + NOVA LISTA */}
             <div style={{ padding: '20px', background: '#333', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
               <h2 style={{ margin: 0, fontSize: '18px', display: 'flex', alignItems: 'center', gap: '10px' }}>
                 <List size={20} color="#e50914" /> Listas de {usuarioSelecionado.username}
@@ -394,7 +494,6 @@ export default function AdminPanel({ token, onVoltar }) {
             
             <div style={{ padding: '20px', maxHeight: '70vh', overflowY: 'auto' }}>
               
-              {/* FORMULÁRIO DE NOVA PLAYLIST */}
               {mostrarFormNova && (
                 <div style={{ background: '#1a1a1a', padding: '20px', borderRadius: '8px', border: '1px dashed #00C851', marginBottom: '20px' }}>
                   <h3 style={{ marginTop: 0, color: '#00C851', fontSize: '16px' }}>Adicionar Nova Playlist</h3>
@@ -420,7 +519,6 @@ export default function AdminPanel({ token, onVoltar }) {
                   {playlistsUsuario.map(pl => (
                     <div key={pl.id} style={{ background: '#1a1a1a', padding: '20px', borderRadius: '8px', border: '1px solid #333' }}>
                       
-                      {/* FORMULÁRIO DE EDIÇÃO */}
                       {editandoPlaylist?.id === pl.id ? (
                         <form onSubmit={salvarEdicaoPlaylist} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                           <input type="text" value={editandoPlaylist.name || ''} onChange={e => setEditandoPlaylist({...editandoPlaylist, name: e.target.value})} style={estiloInput} placeholder="Nome da Lista" required />
@@ -438,7 +536,6 @@ export default function AdminPanel({ token, onVoltar }) {
                         </form>
                       ) : (
                         
-                        /* MODO VISUALIZAÇÃO DA PLAYLIST */
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div>
                             <div style={{ fontWeight: 'bold', fontSize: '16px', color: '#fff', marginBottom: '5px' }}>{pl.name}</div>

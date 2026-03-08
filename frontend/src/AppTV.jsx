@@ -10,14 +10,10 @@ const EPISODIO_PADRAO = CAPA_PADRAO;
 export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, setPlaylistAtiva }) {
   
   const [mostrarAdmin, setMostrarAdmin] = useState(false);
-
   const [conteudo, setConteudo] = useState([]);
   const [tipoAtual, setTipoAtual] = useState('filmes'); 
   const [busca, setBusca] = useState('');
   
-  // ==========================================
-  // NOVO: Estados para a Barra de Pesquisa
-  // ==========================================
   const [modoBusca, setModoBusca] = useState(false);
   const inputBuscaRef = useRef(null);
 
@@ -38,6 +34,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const categoriasScrollRef = useRef(null); 
   const [indiceDestaque, setIndiceDestaque] = useState(0);
 
+  // MÁGICA: GUARDA O ESTADO ATUAL NUM REF PARA O BOTÃO VOLTAR NUNCA MAIS FALHAR
+  const estadoApp = useRef({ itemSelecionado: null, modoBusca: false, detalhesAbertos: false });
+
+  useEffect(() => {
+      estadoApp.current = {
+          itemSelecionado,
+          modoBusca,
+          detalhesAbertos: !!(filmeDetalhes || serieDetalhes || canalDetalhes)
+      };
+  }, [itemSelecionado, modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes]);
+
   const fecharDetalhes = () => {
     setSerieDetalhes(null);
     setFilmeDetalhes(null);
@@ -57,21 +64,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     try { return JSON.parse(localStorage.getItem(`boxiptv_progresso_${sessaoUsuario.username}`)) || {}; } catch (e) { return {}; }
   });
 
-  // ==========================================
-  // COMPENSAÇÃO MATEMÁTICA DE ESCALA
-  // ==========================================
-  const ESCALA_TV = 0.85; // Pode alterar livremente para 0.70 ou 0.75 depois
+  const ESCALA_TV = 0.75;
 
   useEffect(() => {
     document.body.style.zoom = ESCALA_TV;
-    // Salva a escala em uma variável global para o CSS usar nos cálculos
     document.documentElement.style.setProperty('--escala-tv', ESCALA_TV);
-    
     return () => {
       document.body.style.zoom = "1";
       document.documentElement.style.setProperty('--escala-tv', '1');
     };
   }, []);
+
   const getIptvUrl = (action, extraParams = '') => {
     let baseUrl = playlistAtiva.server_url.trim();
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
@@ -79,7 +82,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
   };
 
-  // Efeito para focar no input quando a busca for ativada
   useEffect(() => {
     if (modoBusca && inputBuscaRef.current) {
       inputBuscaRef.current.focus();
@@ -98,21 +100,15 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         let cats = Array.isArray(dCat) ? dCat : [];
         cats.sort((a, b) => (a.category_name || '').trim().localeCompare((b.category_name || '').trim(), 'pt-BR', {sensitivity: 'base'}));
         setCategorias(cats);
-        
-        if (cats.length > 0) {
-            setCategoriaSelecionada(cats[0].category_id);
-        } else {
-            setCarregando(false);
-        }
+        if (cats.length > 0) setCategoriaSelecionada(cats[0].category_id);
+        else setCarregando(false);
       }).catch(err => { setCategorias([]); setCarregando(false); });
   }, [tipoAtual, playlistAtiva]);
 
   useEffect(() => {
     if (!playlistAtiva || !categoriaSelecionada) return;
-
     if (categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') {
-        setCarregando(false);
-        return;
+        setCarregando(false); return;
     }
 
     setCarregando(true);
@@ -148,7 +144,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     if (itensDestaqueRaw[i + 1]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
     else if (itensDestaqueRaw[i]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
   }
-
   const itensGrid = paresDestaque.length > 0 ? conteudoParaExibir.slice(6) : conteudoParaExibir;
 
   useEffect(() => {
@@ -198,13 +193,39 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     if (!ep) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
+
+    // NOVO: Lógica para encontrar o próximo episódio na mesma temporada
+    let proximoEp = null;
+    if (serieDetalhes && serieDetalhes.episodes && temporadaSelecionada) {
+        const listaEps = serieDetalhes.episodes[temporadaSelecionada];
+        const indexAtual = listaEps.findIndex(e => e.id === ep.id);
+        // Se achou o episódio atual e ele não for o último da array
+        if (indexAtual !== -1 && indexAtual < listaEps.length - 1) {
+            proximoEp = listaEps[indexAtual + 1];
+        }
+    }
+
     setItemSelecionado({ 
         id: ep.id, 
         nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, 
         url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, 
         startTime: inicio, 
-        poster: ep.info?.movie_image || serieDetalhes?.info?.cover 
+        poster: ep.info?.movie_image || serieDetalhes?.info?.cover,
+        proximoEpisodio: proximoEp // Guardamos o objeto do próximo episódio aqui
     });
+  };
+
+  const pularParaProximo = () => {
+      if (itemSelecionado && itemSelecionado.proximoEpisodio) {
+          // Marca o atual como 100% assistido removendo-o dos progressos salvos
+          let novosProgressos = { ...progressos };
+          delete novosProgressos[itemSelecionado.id];
+          setProgressos(novosProgressos);
+          localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos));
+          
+          // Dá o play no próximo do zero
+          handlePlayEpisode(itemSelecionado.proximoEpisodio, 0);
+      }
   };
 
   const handlePlayCanal = () => {
@@ -221,53 +242,39 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   };
 
   // ==========================================
-  // NAVEGAÇÃO ESPACIAL E CONTROLE NATIVO DO BOTÃO VOLTAR
+  // NAVEGAÇÃO NATIVA E VOLTAR (CORRIGIDO PARA NÃO CRASHAR)
   // ==========================================
   useEffect(() => {
-      // 1. OBRIGA O APLICATIVO A NÃO FECHAR E FAZER APENAS O QUE MANDAMOS
-      const backButtonListener = CapacitorApp.addListener('backButton', ({ canGoBack }) => {
-        // A. Se o player estiver aberto, NÃO DEIXA FECHAR O APP, mas feche o Player internamente
-        if (itemSelecionado) {
-          // Nota: O player também tem o escape/backspace dele para se fechar.
-          return;
-        }
+      let backButtonListener = null;
 
-        // B. Se a barra de pesquisa estiver ativa, feche apenas a pesquisa
-        if (modoBusca) {
-          setModoBusca(false);
-          return;
-        }
+      const setupListener = async () => {
+        backButtonListener = await CapacitorApp.addListener('backButton', () => {
+            const estado = estadoApp.current;
+            if (estado.itemSelecionado) return; // Se for o player, AppTV ignora, o Player fecha ele próprio
+            if (estado.modoBusca) { setModoBusca(false); return; }
+            if (estado.detalhesAbertos) { fecharDetalhes(); return; }
+        });
+      };
+      
+      setupListener();
 
-        // C. Se estiver na tela de detalhes de um filme/série, fecha e volta para a grade
-        if (filmeDetalhes || serieDetalhes || canalDetalhes) {
-          fecharDetalhes();
-          return;
-        }
-        
-        // Se chegar aqui, o utilizador está no menu principal. Deixamos a app rodar sem fazer nada!
-      });
-
-      // 2. LÓGICA DAS SETAS (NAVEGAÇÃO COM TECLADO / CONTROLE)
       const handleKeyDown = (e) => {
-        
+        const estado = estadoApp.current;
         if (e.key === 'Escape' || e.key === 'Backspace') {
-          e.preventDefault(); // BLOQUEIO ABSOLUTO (Garante que a app não morre na TV Box)
-          if (itemSelecionado) return;
-          if (modoBusca) { setModoBusca(false); return; }
-          if (filmeDetalhes || serieDetalhes || canalDetalhes) { fecharDetalhes(); return; }
+          e.preventDefault(); 
+          if (estado.itemSelecionado) return;
+          if (estado.modoBusca) { setModoBusca(false); return; }
+          if (estado.detalhesAbertos) { fecharDetalhes(); return; }
         }
 
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
         if (!arrowKeys.includes(e.key)) return;
-        
         const currentFocus = document.activeElement;
-        
-        if (modoBusca && currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
+        if (estado.modoBusca && currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
         
         const focusables = Array.from(document.querySelectorAll('.tv-focusable')).filter(el => { const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && getComputedStyle(el).opacity !== '0'; });
         if (!focusables.includes(currentFocus)) { if (focusables.length > 0) focusables[0].focus(); e.preventDefault(); return; }
         e.preventDefault(); const currentRect = currentFocus.getBoundingClientRect(); let bestNext = null; let minDistance = Infinity;
-        
         focusables.forEach(candidate => {
           if (candidate === currentFocus) return;
           const candidateRect = candidate.getBoundingClientRect();
@@ -283,14 +290,16 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       
       window.addEventListener('keydown', handleKeyDown); 
       
-      // Limpeza dos eventos ao desmontar o componente
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        // O removeAllListeners garante que não há comandos "fantasmas" a fechar a app.
-        CapacitorApp.removeAllListeners(); 
+        if (backButtonListener) {
+            backButtonListener.remove(); 
+        }
       };
       
-  }, [modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes, itemSelecionado]);
+  // ARRAY VAZIO: ESTE USEEFFECT SÓ É MONTADO UMA VEZ
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleImageError = (e, fallback) => { if (e.target.src !== fallback) { e.target.onerror = null; e.target.src = fallback; } };
   
@@ -305,7 +314,25 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const handleClosePlayer = (tempoAtual, duracao) => { if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0; let novosProgressos = { ...progressos }; if (percentagemVista > 0.95) { delete novosProgressos[itemSelecionado.id]; } else { novosProgressos[itemSelecionado.id] = tempoAtual; } setProgressos(novosProgressos); localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos)); } setItemSelecionado(null); setTimeout(() => { const elementos = document.querySelectorAll('.tv-focusable'); if(elementos.length > 0) elementos[0].focus(); }, 100); };
   
   const formatarTempo = (segundos) => { if (!segundos) return ''; const m = Math.floor(segundos / 60); const s = Math.floor(segundos % 60); return `${m}m ${s}s`; };
-  const acionarComEnter = (e, acao) => { if (e.key === 'Enter') { e.preventDefault(); acao(); } };
+  
+  const decodeEPGText = (str) => {
+      if (!str) return '';
+      try {
+          // Tenta descodificar garantindo que os acentos (UTF-8) não quebram
+          return decodeURIComponent(escape(atob(str)));
+      } catch (e) {
+          return str; // Se falhar ou não for Base64, retorna o original
+      }
+  };
+
+  // CORREÇÃO: Força um clique real caso o Android não perceba que o Enter era num botão
+  const acionarComEnter = (e, acao) => { 
+      if (e.key === 'Enter') { 
+          e.preventDefault(); 
+          if (acao) acao(); 
+          else e.currentTarget.click(); 
+      } 
+  };
   
   const itemEstaNaLista = itemAtualDetalhes && minhaLista.some(i => (i.stream_id || i.series_id) === (itemAtualDetalhes.stream_id || itemAtualDetalhes.series_id));
 
@@ -360,7 +387,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         
         <div className="sidebar-container" style={{ width: '250px', backgroundColor: '#222', padding: '15px', borderRadius: '8px', height: 'calc((100vh / var(--escala-tv, 1)) - 120px)', display: 'flex', flexDirection: 'column', flexShrink: 0, position: 'sticky', top: '100px' }}>
 
-          {/* LÓGICA DE BARRA DE PESQUISA ATUALIZADA */}
           <div style={{ marginBottom: '15px', position: 'relative' }}>
             <Search size={16} color="#aaa" style={{ position: 'absolute', left: '10px', top: '50%', transform: 'translateY(-50%)', zIndex: 2 }} />
             
@@ -429,7 +455,16 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         </div>
 
         <div className="conteudo-container" style={{ flex: 1, minWidth: 0 }}>
-          {itemSelecionado && <Player channel={itemSelecionado} onClose={handleClosePlayer} startTime={itemSelecionado.startTime || 0} poster={itemSelecionado.poster} />}
+          {itemSelecionado && (
+            <Player 
+                key={itemSelecionado.id} 
+                channel={itemSelecionado} 
+                onClose={handleClosePlayer} 
+                startTime={itemSelecionado.startTime || 0} 
+                poster={itemSelecionado.poster} 
+                onPlayNext={pularParaProximo} 
+            />
+        )}
 
           {filmeDetalhes && filmeDetalhes.info ? (
             <div style={{ backgroundColor: '#222', padding: '30px', borderRadius: '8px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
@@ -480,16 +515,37 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                 {serieDetalhes.episodes && Array.isArray(serieDetalhes.episodes[temporadaSelecionada]) && serieDetalhes.episodes[temporadaSelecionada].map((ep, idx) => {
                   const tempoEp = progressos[ep.id] || 0; 
                   return (
-                    <div key={idx} tabIndex={0} className="tv-focusable" onClick={() => handlePlayEpisode(ep, tempoEp > 15 ? tempoEp : 0)} onKeyDown={(e) => acionarComEnter(e, () => handlePlayEpisode(ep, tempoEp > 15 ? tempoEp : 0))} style={{ background: '#222', padding: '10px', borderRadius: '5px', border: '1px solid #444', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}>
+                    <div 
+                      key={idx} 
+                      tabIndex={0} 
+                      className="tv-focusable" 
+                      onClick={() => handlePlayEpisode(ep, tempoEp > 15 ? tempoEp : 0)} 
+                      onKeyDown={(e) => {
+                          // CORREÇÃO: Chamar a função diretamente preserva a permissão de Autoplay nativa do navegador
+                          if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handlePlayEpisode(ep, tempoEp > 15 ? tempoEp : 0);
+                          }
+                      }}
+                      style={{ background: '#222', padding: '10px', borderRadius: '5px', border: '1px solid #444', display: 'flex', flexDirection: 'column', cursor: 'pointer' }}
+                    >
                       <img src={ep.info?.movie_image || EPISODIO_PADRAO} alt={ep.title || 'Episódio'} loading="lazy" onError={(e) => handleImageError(e, EPISODIO_PADRAO)} style={{ width: '100%', borderRadius: '4px', marginBottom: '10px' }} />
                       <div style={{ fontWeight: 'bold', fontSize: '13px', marginBottom: '10px', flex: 1 }}>{ep.episode_num}. {ep.title || 'Título Indisponível'}</div>
+                      
+                      {/* ESTRUTURA ORIGINAL DE BOTÕES RESTAURADA */}
                       {tempoEp > 15 ? (
                         <div style={{ display: 'flex', gap: '5px' }}>
-                          <button tabIndex="-1" onClick={(e) => { e.stopPropagation(); handlePlayEpisode(ep, tempoEp); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '8px', fontSize: '12px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}><Play fill="currentColor" size={14} style={{ marginRight: '4px' }} /> Cont.</button>
-                          <button tabIndex="-1" onClick={(e) => { e.stopPropagation(); handlePlayEpisode(ep, 0); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '8px', fontSize: '12px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}><RefreshCw size={14} style={{ marginRight: '4px' }} /> Do Zero</button>
+                          <button tabIndex="-1" onClick={(e) => { e.stopPropagation(); handlePlayEpisode(ep, tempoEp); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '8px', fontSize: '12px', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>
+                            <Play fill="currentColor" size={14} style={{ marginRight: '4px' }} /> Cont.
+                          </button>
+                          <button tabIndex="-1" onClick={(e) => { e.stopPropagation(); handlePlayEpisode(ep, 0); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 1, padding: '8px', fontSize: '12px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' }}>
+                            <RefreshCw size={14} style={{ marginRight: '4px' }} /> Do Zero
+                          </button>
                         </div>
                       ) : (
-                        <button tabIndex="-1" onClick={(e) => { e.stopPropagation(); handlePlayEpisode(ep, 0); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '8px', fontSize: '12px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}><Play fill="currentColor" size={14} style={{ marginRight: '4px' }} /> Assistir</button>
+                        <button tabIndex="-1" onClick={(e) => { e.stopPropagation(); handlePlayEpisode(ep, 0); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%', padding: '8px', fontSize: '12px', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer', fontWeight: 'bold' }}>
+                          <Play fill="currentColor" size={14} style={{ marginRight: '4px' }} /> Assistir
+                        </button>
                       )}
                     </div>
                   );
@@ -519,14 +575,25 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                       const agora = new Date();
                       const isCurrent = agora >= dataInicio && agora <= dataFim;
                       
+                      // Descodifica os títulos e descrições do Base64
+                      const tituloDecodificado = decodeEPGText(prog.title);
+                      const descDecodificada = decodeEPGText(prog.description);
+                      
                       return (
                         <div key={idx} style={{ padding: '15px', borderRadius: '5px', backgroundColor: isCurrent ? 'rgba(229, 9, 20, 0.1)' : '#1a1a1a', borderLeft: `4px solid ${isCurrent ? '#e50914' : '#333'}`, display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'wrap' }}>
                           <div style={{ color: isCurrent ? '#fff' : '#aaa', fontWeight: 'bold', minWidth: '100px', fontSize: '14px' }}>
                             {dataInicio.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - {dataFim.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 'bold', fontSize: '16px', color: isCurrent ? '#fff' : '#ccc', marginBottom: '5px' }}>{prog.title ? (prog.title) : 'Sem título'} {isCurrent && <span style={{ fontSize: '10px', backgroundColor: '#e50914', padding: '2px 6px', borderRadius: '3px', marginLeft: '10px', verticalAlign: 'middle' }}>AGORA</span>}</div>
-                            {prog.description && <div style={{ fontSize: '13px', color: '#888' }}>{prog.description.length > 150 ? prog.description.substring(0, 150) + '...' : prog.description}</div>}
+                            <div style={{ fontWeight: 'bold', fontSize: '16px', color: isCurrent ? '#fff' : '#ccc', marginBottom: '5px' }}>
+                                {tituloDecodificado ? tituloDecodificado : 'Sem título'} 
+                                {isCurrent && <span style={{ fontSize: '10px', backgroundColor: '#e50914', padding: '2px 6px', borderRadius: '3px', marginLeft: '10px', verticalAlign: 'middle', color: 'white' }}>AGORA</span>}
+                            </div>
+                            {descDecodificada && (
+                                <div style={{ fontSize: '13px', color: '#888' }}>
+                                    {descDecodificada.length > 150 ? descDecodificada.substring(0, 150) + '...' : descDecodificada}
+                                </div>
+                            )}
                           </div>
                         </div>
                       );
