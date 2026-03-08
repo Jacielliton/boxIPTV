@@ -395,7 +395,11 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                 tabIndex={0} 
                 className="tv-focusable" 
                 onClick={() => setModoBusca(true)}
-                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '1px solid #333', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: busca ? 'white' : '#aaa', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                // Adicionado: Muda a cor da borda ao focar com o controle, sem chamar o teclado
+                onFocus={(e) => e.target.style.borderColor = 'white'}
+                onBlur={(e) => e.target.style.borderColor = '#333'}
+                // Alterado: border de 1px para 2px (evita a tela "pular") e mantido o outline: 'none'
+                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '2px solid #333', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: busca ? 'white' : '#aaa', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'border-color 0.2s' }}
               >
                 {busca ? busca : "Buscar na categoria..."}
               </button>
@@ -418,10 +422,13 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                     setModoBusca(false);
                   }
                 }}
-                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '2px solid #e50914', outline: 'none', fontSize: '14px', backgroundColor: '#444', color: 'white', boxSizing: 'border-box' }} 
+                // Adicionado: Mantém o contorno branco quando clica e o teclado abre
+                onFocus={(e) => e.target.style.borderColor = 'white'}
+                // Mantido o outline: 'none'
+                style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '2px solid #e50914', outline: 'none', fontSize: '14px', backgroundColor: '#444', color: 'white', boxSizing: 'border-box', transition: 'border-color 0.2s' }} 
               />
             )}
-          </div>                    
+          </div>                 
 
           <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 10px 0', borderBottom: '1px solid #333', paddingBottom: '10px' }}>
             <li tabIndex={0} className="tv-focusable" onClick={() => handleCategoriaClick('minha-lista')} onKeyDown={(e) => acionarComEnter(e, () => handleCategoriaClick('minha-lista'))} style={{ display: 'flex', alignItems: 'center', padding: '12px 10px', cursor: 'pointer', borderRadius: '5px', marginBottom: '5px', fontSize: '14px', backgroundColor: categoriaSelecionada === 'minha-lista' ? '#e50914' : 'transparent', fontWeight: 'bold', color: '#fff' }}>

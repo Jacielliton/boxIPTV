@@ -98,10 +98,18 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                     toggleTelaCheia();
                     break;
                 case 'arrowright':
-                    if (videoRef.current && isVod) videoRef.current.currentTime += 10;
+                    // CORREÇÃO: Avança 15 segundos limitando ao final do vídeo
+                    if (videoRef.current && isVod) {
+                        videoRef.current.currentTime = Math.min(videoRef.current.currentTime + 15, videoRef.current.duration || 0);
+                        setShowControls(true);
+                    }
                     break;
                 case 'arrowleft':
-                    if (videoRef.current && isVod) videoRef.current.currentTime -= 10;
+                    // CORREÇÃO: Retrocede 15 segundos limitando ao início (0) do vídeo
+                    if (videoRef.current && isVod) {
+                        videoRef.current.currentTime = Math.max(videoRef.current.currentTime - 15, 0);
+                        setShowControls(true);
+                    }
                     break;
                 case 'escape':
                 case 'backspace': 
