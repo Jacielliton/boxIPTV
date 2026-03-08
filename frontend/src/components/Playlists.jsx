@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Trash2, Plus, LogOut, Monitor, User, Globe, Calendar, RefreshCw, Settings, DownloadCloud, X } from 'lucide-react';
 import AdminPanel from './AdminPanel'; // Importa o painel de administração
+import { Browser } from '@capacitor/browser';
 
 // =========================================================
 // DEFINA AQUI A VERSÃO ATUAL DO SEU APLICATIVO
@@ -172,7 +173,16 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
           <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
             <button 
               className="tv-focusable" 
-              onClick={() => window.location.href = atualizacaoDisponivel.link || "http://tecnopriv.top"} 
+              onClick={async () => {
+                const link = atualizacaoDisponivel.link || "http://tecnopriv.top";
+                try {
+                    // Abre o link no navegador externo do Android TV
+                    await Browser.open({ url: link });
+                } catch (e) {
+                    // Fallback caso a TV não suporte o plugin Browser
+                    window.open(link, '_system');
+                }
+              }} 
               style={{ padding: '10px 20px', backgroundColor: 'white', color: '#0056b3', border: 'none', borderRadius: '8px', cursor: 'pointer', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: '8px' }}
             >
               Baixar Agora

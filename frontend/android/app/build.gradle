@@ -65,6 +65,7 @@ dependencies {
 configurations.all {
     resolutionStrategy {
         force "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+        force 'androidx.browser:browser:1.8.0'
     }
 }
 
