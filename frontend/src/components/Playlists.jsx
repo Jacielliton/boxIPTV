@@ -46,7 +46,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
 
     const verificarAtualizacao = async () => {
       try {
-        const resposta = await fetch('http://localhost:8006/api/versao_apk');
+        const resposta = await fetch('/api/versao_apk');
         
         if (resposta.ok) {
           const dados = await resposta.json();
@@ -67,7 +67,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
   const carregarPlaylists = async () => {
     setCarregando(true);
     try {
-      const response = await fetch('http://localhost:8006/api/playlists', {
+      const response = await fetch('/api/playlists', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       
@@ -101,7 +101,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
     }
 
     try {
-      const response = await fetch('http://localhost:8006/api/playlists', {
+      const response = await fetch('/api/playlists', {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -129,7 +129,7 @@ export default function Playlists({ token, onSelectPlaylist, onLogout, sessaoUsu
     if (!window.confirm("Deseja realmente remover esta lista?")) return;
 
     try {
-      const response = await fetch(`http://localhost:8006/api/playlists/${id}`, {
+      const response = await fetch(`/api/playlists/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
