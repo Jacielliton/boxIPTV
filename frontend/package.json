@@ -15,11 +15,13 @@
     "@capacitor/browser": "^8.0.2",
     "@capacitor/core": "^8.1.0",
     "@capacitor/splash-screen": "^8.0.1",
+    "capacitor-video-player": "^6.0.2",
     "hls.js": "^1.6.15",
     "lucide-react": "^0.576.0",
     "mpegts.js": "^1.8.0",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "spatial-navigation-js": "^1.0.0"
   },
   "devDependencies": {
     "@capacitor/assets": "^3.0.5",

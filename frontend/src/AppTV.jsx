@@ -1,14 +1,16 @@
-import { useState, useEffect, useRef } from 'react';
-import { App as CapacitorApp } from '@capacitor/app';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { App as CapacitorApp } from '@capacitor/app'; 
 import Player from './components/Player';
 import AdminPanel from './components/AdminPanel';
 import { Film, Tv, Radio, Clock, LayoutGrid, LogOut, Settings, Play, RefreshCw, Star, Bookmark, Check, Search, Trash2 } from 'lucide-react';
+import SpatialNavigation from 'spatial-navigation-js';
 
 const CAPA_PADRAO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
 const EPISODIO_PADRAO = CAPA_PADRAO;
 
 export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, setPlaylistAtiva }) {
   
+  // 1. PRIMEIRO: Todos os estados (useStates)
   const [mostrarAdmin, setMostrarAdmin] = useState(false);
   const [conteudo, setConteudo] = useState([]);
   const [tipoAtual, setTipoAtual] = useState('filmes'); 
@@ -27,16 +29,41 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const [temporadaSelecionada, setTemporadaSelecionada] = useState(null);
   const [filmeDetalhes, setFilmeDetalhes] = useState(null);
   const [canalDetalhes, setCanalDetalhes] = useState(null);
-  
   const [itemAtualDetalhes, setItemAtualDetalhes] = useState(null);
+
+  const [historico, setHistorico] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`boxiptv_hist_${sessaoUsuario.username}`)) || []; } catch (e) { return []; }
+  });
+  const [minhaLista, setMinhaLista] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`boxiptv_lista_${sessaoUsuario.username}`)) || []; } catch (e) { return []; }
+  });
+  const [progressos, setProgressos] = useState(() => {
+    try { return JSON.parse(localStorage.getItem(`boxiptv_progresso_${sessaoUsuario.username}`)) || {}; } catch (e) { return {}; }
+  });
   
-  const dragRef = useRef({ isDown: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0, dragged: false });
-  const categoriasScrollRef = useRef(null); 
   const [indiceDestaque, setIndiceDestaque] = useState(0);
 
-  // MÁGICA: GUARDA O ESTADO ATUAL NUM REF PARA O BOTÃO VOLTAR NUNCA MAIS FALHAR
+  // 2. SEGUNDO: Referências (useRefs)
+  const dragRef = useRef({ isDown: false, startX: 0, startY: 0, scrollLeft: 0, scrollTop: 0, dragged: false });
+  const categoriasScrollRef = useRef(null); 
   const estadoApp = useRef({ itemSelecionado: null, modoBusca: false, detalhesAbertos: false });
 
+  // 3. TERCEIRO: Funções Blindadas (useCallbacks) que não dependem de nada
+  const fecharDetalhes = useCallback(() => {
+    setSerieDetalhes(null);
+    setFilmeDetalhes(null);
+    setCanalDetalhes(null);
+    setItemAtualDetalhes(null);
+  }, []);
+
+  const getIptvUrl = useCallback((action, extraParams = '') => {
+    let baseUrl = playlistAtiva.server_url.trim();
+    if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
+    baseUrl = baseUrl.replace(/\/$/, "").replace("/player_api.php", "");
+    return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
+  }, [playlistAtiva]);
+
+  // 4. QUARTO: Os Efeitos Colaterais (useEffects)
   useEffect(() => {
       estadoApp.current = {
           itemSelecionado,
@@ -44,25 +71,6 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           detalhesAbertos: !!(filmeDetalhes || serieDetalhes || canalDetalhes)
       };
   }, [itemSelecionado, modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes]);
-
-  const fecharDetalhes = () => {
-    setSerieDetalhes(null);
-    setFilmeDetalhes(null);
-    setCanalDetalhes(null);
-    setItemAtualDetalhes(null);
-  };
-
-  const [historico, setHistorico] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(`boxiptv_hist_${sessaoUsuario.username}`)) || []; } catch (e) { return []; }
-  });
-
-  const [minhaLista, setMinhaLista] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(`boxiptv_lista_${sessaoUsuario.username}`)) || []; } catch (e) { return []; }
-  });
-
-  const [progressos, setProgressos] = useState(() => {
-    try { return JSON.parse(localStorage.getItem(`boxiptv_progresso_${sessaoUsuario.username}`)) || {}; } catch (e) { return {}; }
-  });
 
   const ESCALA_TV = 0.75;
 
@@ -75,13 +83,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     };
   }, []);
 
-  const getIptvUrl = (action, extraParams = '') => {
-    let baseUrl = playlistAtiva.server_url.trim();
-    if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
-    baseUrl = baseUrl.replace(/\/$/, "").replace("/player_api.php", "");
-    return `${baseUrl}/player_api.php?username=${playlistAtiva.iptv_username}&password=${playlistAtiva.iptv_password}&action=${action}${extraParams}`;
-  };
-
+  
   useEffect(() => {
     if (modoBusca && inputBuscaRef.current) {
       inputBuscaRef.current.focus();
@@ -103,7 +105,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         if (cats.length > 0) setCategoriaSelecionada(cats[0].category_id);
         else setCarregando(false);
       }).catch(err => { setCategorias([]); setCarregando(false); });
-  }, [tipoAtual, playlistAtiva]);
+  }, [tipoAtual, playlistAtiva, getIptvUrl]);
 
   useEffect(() => {
     if (!playlistAtiva || !categoriaSelecionada) return;
@@ -125,27 +127,32 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         setCarregando(false);
         setIndiceDestaque(0); 
       }).catch(err => { setConteudo([]); setCarregando(false); });
-  }, [categoriaSelecionada, tipoAtual, playlistAtiva]);
+  }, [categoriaSelecionada, tipoAtual, playlistAtiva, fecharDetalhes, getIptvUrl]); // <-- ADICIONADOS AQUI
 
-  let conteudoParaExibir = [];
-  if (categoriaSelecionada === 'recentes') {
-    conteudoParaExibir = historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
-  } else if (categoriaSelecionada === 'minha-lista') {
-    conteudoParaExibir = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
-  } else {
-    conteudoParaExibir = conteudo.filter(item => {
-        return !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()));
-    }).slice(0, limite);
-  }
+  // Congela a filtragem da lista
+  const conteudoParaExibir = useMemo(() => {
+    if (categoriaSelecionada === 'recentes') {
+      return historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
+    } else if (categoriaSelecionada === 'minha-lista') {
+      return minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
+    } else {
+      return conteudo.filter(item => !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
+    }
+  }, [historico, minhaLista, conteudo, tipoAtual, busca, limite, categoriaSelecionada]);
 
-  const itensDestaqueRaw = conteudoParaExibir.length > 0 && busca === '' && categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' ? conteudoParaExibir.slice(0, 6) : [];
-  const paresDestaque = [];
-  for (let i = 0; i < itensDestaqueRaw.length; i += 2) {
-    if (itensDestaqueRaw[i + 1]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
-    else if (itensDestaqueRaw[i]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
-  }
-  // NOVO 4: Mantém todos os itens na grade, sem ocultar os 6 primeiros
+  // Congela o cálculo dos banners em destaque
+  const paresDestaque = useMemo(() => {
+    const itensDestaqueRaw = conteudoParaExibir.length > 0 && busca === '' && categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' ? conteudoParaExibir.slice(0, 6) : [];
+    const pares = [];
+    for (let i = 0; i < itensDestaqueRaw.length; i += 2) {
+      if (itensDestaqueRaw[i + 1]) pares.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
+      else if (itensDestaqueRaw[i]) pares.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
+    }
+    return pares;
+  }, [conteudoParaExibir, busca, categoriaSelecionada]);
+
   const itensGrid = conteudoParaExibir;
+
 
   useEffect(() => {
     if (paresDestaque.length <= 1) return;
@@ -177,7 +184,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     }).catch(() => { setCarregando(false); });
   };
 
-  const handlePlayFilme = (inicio = 0) => {
+  const handlePlayFilme = useCallback((inicio = 0) => {
     if (!filmeDetalhes || !filmeDetalhes.movie_data) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
@@ -188,19 +195,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         startTime: inicio, 
         poster: filmeDetalhes.info?.movie_image 
     });
-  };
+  }, [filmeDetalhes, playlistAtiva]);
 
-  const handlePlayEpisode = (ep, inicio = 0) => {
+  const handlePlayEpisode = useCallback((ep, inicio = 0) => {
     if (!ep) return;
     let baseUrl = playlistAtiva.server_url.trim().replace(/\/$/, "").replace("/player_api.php", "");
     if (!baseUrl.startsWith("http")) baseUrl = "http://" + baseUrl;
 
-    // NOVO: Lógica para encontrar o próximo episódio na mesma temporada
     let proximoEp = null;
     if (serieDetalhes && serieDetalhes.episodes && temporadaSelecionada) {
         const listaEps = serieDetalhes.episodes[temporadaSelecionada];
         const indexAtual = listaEps.findIndex(e => e.id === ep.id);
-        // Se achou o episódio atual e ele não for o último da array
         if (indexAtual !== -1 && indexAtual < listaEps.length - 1) {
             proximoEp = listaEps[indexAtual + 1];
         }
@@ -212,22 +217,20 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
         url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.mp4`, 
         startTime: inicio, 
         poster: ep.info?.movie_image || serieDetalhes?.info?.cover,
-        proximoEpisodio: proximoEp // Guardamos o objeto do próximo episódio aqui
+        proximoEpisodio: proximoEp 
     });
-  };
+  }, [serieDetalhes, temporadaSelecionada, playlistAtiva]);
 
-  const pularParaProximo = () => {
+  const pularParaProximo = useCallback(() => {
       if (itemSelecionado && itemSelecionado.proximoEpisodio) {
-          // Marca o atual como 100% assistido removendo-o dos progressos salvos
           let novosProgressos = { ...progressos };
           delete novosProgressos[itemSelecionado.id];
           setProgressos(novosProgressos);
           localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos));
           
-          // Dá o play no próximo do zero
           handlePlayEpisode(itemSelecionado.proximoEpisodio, 0);
       }
-  };
+  }, [itemSelecionado, progressos, sessaoUsuario.username, handlePlayEpisode]);
 
   const handlePlayCanal = () => {
     if (!canalDetalhes || !canalDetalhes.info) return;
@@ -253,15 +256,45 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   };
 
   // ==========================================
-  // NAVEGAÇÃO NATIVA E VOLTAR (CORRIGIDO PARA NÃO CRASHAR)
+  // NAVEGAÇÃO NATIVA (SPATIAL NAVIGATION) E VOLTAR
   // ==========================================
+  
+  // 1. Inicializa o motor de navegação da Smart TV
+  useEffect(() => {
+      SpatialNavigation.init();
+
+      // Diz para a biblioteca gerenciar tudo que tiver a sua classe
+      SpatialNavigation.add({
+          selector: '.tv-focusable'
+      });
+
+      SpatialNavigation.makeFocusable();
+      SpatialNavigation.focus();
+
+      return () => {
+          SpatialNavigation.uninit(); // <--- CORREÇÃO AQUI
+      };
+  }, []);
+
+  // 2. Pausa a navegação pelas setas quando o usuário for digitar na busca
+  useEffect(() => {
+      if (modoBusca) {
+          SpatialNavigation.pause();
+      } else {
+          SpatialNavigation.resume();
+          // Garante que o input ou o botão recupere o foco
+          setTimeout(() => SpatialNavigation.focus(), 100);
+      }
+  }, [modoBusca]);
+
+  // 3. Apenas as regras de Sair/Voltar (A biblioteca cuida das setas)
   useEffect(() => {
       let backButtonListener = null;
 
       const setupListener = async () => {
         backButtonListener = await CapacitorApp.addListener('backButton', () => {
             const estado = estadoApp.current;
-            if (estado.itemSelecionado) return; // Se for o player, AppTV ignora, o Player fecha ele próprio
+            if (estado.itemSelecionado) return; 
             if (estado.modoBusca) { setModoBusca(false); return; }
             if (estado.detalhesAbertos) { fecharDetalhes(); return; }
         });
@@ -271,54 +304,29 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
       const handleKeyDown = (e) => {
         const estado = estadoApp.current;
+        
+        // Trata apenas as teclas de voltar
         if (e.key === 'Escape' || e.key === 'Backspace') {
           e.preventDefault(); 
           if (estado.itemSelecionado) return;
           if (estado.modoBusca) { setModoBusca(false); return; }
           if (estado.detalhesAbertos) { 
               fecharDetalhes(); 
-              // NOVO 3: Foca na primeira imagem listada na tela
-              setTimeout(() => {
-                  const firstItem = document.querySelector('.item-grid-tv.tv-focusable');
-                  if (firstItem) firstItem.focus();
-              }, 100);
+              // Manda a biblioteca focar no item mais próximo na tela
+              setTimeout(() => SpatialNavigation.focus(), 100);
               return; 
           }
         }
-
-        const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
-        if (!arrowKeys.includes(e.key)) return;
-        const currentFocus = document.activeElement;
-        if (estado.modoBusca && currentFocus && currentFocus.tagName === 'INPUT' && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) return;
-        
-        const focusables = Array.from(document.querySelectorAll('.tv-focusable')).filter(el => { const rect = el.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && getComputedStyle(el).opacity !== '0'; });
-        if (!focusables.includes(currentFocus)) { if (focusables.length > 0) focusables[0].focus(); e.preventDefault(); return; }
-        e.preventDefault(); const currentRect = currentFocus.getBoundingClientRect(); let bestNext = null; let minDistance = Infinity;
-        focusables.forEach(candidate => {
-          if (candidate === currentFocus) return;
-          const candidateRect = candidate.getBoundingClientRect();
-          let isDirectionMatch = false; let primaryDistance = 0; let orthogonalDistance = 0; const tolerance = 20;
-          if (e.key === 'ArrowUp') { isDirectionMatch = candidateRect.bottom <= currentRect.top + tolerance; primaryDistance = currentRect.top - candidateRect.bottom; orthogonalDistance = Math.max(0, Math.max(candidateRect.left - currentRect.right, currentRect.left - candidateRect.right)); }
-          else if (e.key === 'ArrowDown') { isDirectionMatch = candidateRect.top >= currentRect.bottom - tolerance; primaryDistance = candidateRect.top - currentRect.bottom; orthogonalDistance = Math.max(0, Math.max(candidateRect.left - currentRect.right, currentRect.left - candidateRect.right)); }
-          else if (e.key === 'ArrowLeft') { isDirectionMatch = candidateRect.right <= currentRect.left + tolerance; primaryDistance = currentRect.left - candidateRect.right; orthogonalDistance = Math.max(0, Math.max(candidateRect.top - currentRect.bottom, currentRect.top - candidateRect.bottom)); }
-          else if (e.key === 'ArrowRight') { isDirectionMatch = candidateRect.left >= currentRect.right - tolerance; primaryDistance = candidateRect.left - currentRect.right; orthogonalDistance = Math.max(0, Math.max(candidateRect.top - currentRect.bottom, currentRect.top - candidateRect.bottom)); }
-          if (isDirectionMatch) { if (primaryDistance < 0) primaryDistance = 0; const edgeDistance = Math.sqrt(Math.pow(primaryDistance, 2) + Math.pow(orthogonalDistance, 2)); const weightedDistance = edgeDistance + (orthogonalDistance * 5); if (weightedDistance < minDistance) { minDistance = weightedDistance; bestNext = candidate; } }
-        });
-        if (bestNext) { bestNext.focus({ preventScroll: true }); if (bestNext.closest('.conteudo-container')) bestNext.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' }); else if (categoriasScrollRef.current && categoriasScrollRef.current.contains(bestNext)) { const container = categoriasScrollRef.current; container.scrollTo({ top: bestNext.offsetTop - (container.clientHeight / 2) + (bestNext.clientHeight / 2), behavior: 'smooth' }); } else if (!bestNext.closest('.sidebar-container')) bestNext.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' }); }
       };
       
       window.addEventListener('keydown', handleKeyDown); 
       
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
-        if (backButtonListener) {
-            backButtonListener.remove(); 
-        }
+        if (backButtonListener) backButtonListener.remove(); 
       };
       
-  // ARRAY VAZIO: ESTE USEEFFECT SÓ É MONTADO UMA VEZ
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fecharDetalhes]);
 
   const handleImageError = (e, fallback) => { if (e.target.src !== fallback) { e.target.onerror = null; e.target.src = fallback; } };
   
@@ -330,7 +338,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   
   const toggleMinhaLista = (item) => { if (!item) return; setMinhaLista(prev => { const idUnico = item.stream_id || item.series_id; const jaExiste = prev.find(i => (i.stream_id || i.series_id) === idUnico); const novaLista = jaExiste ? prev.filter(i => (i.stream_id || i.series_id) !== idUnico) : [{ ...item, tipo_salvo: tipoAtual }, ...prev]; localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); };
   
-  const handleClosePlayer = (tempoAtual, duracao) => { 
+  const handleClosePlayer = useCallback((tempoAtual, duracao) => { 
     if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { 
         const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0; 
         let novosProgressos = { ...progressos }; 
@@ -342,16 +350,21 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     const idParaFocar = itemSelecionado?.id;
     setItemSelecionado(null); 
     
-    // NOVO 2: Tenta focar no botão do Player do conteúdo recém assistido
+    // Manda a biblioteca reavaliar a tela e focar no elemento mais lógico
     setTimeout(() => { 
         const focusTarget = document.getElementById(`card-ep-${idParaFocar}`) || document.getElementById('btn-play-video') || document.getElementById('btn-play-canal');
-        if (focusTarget) focusTarget.focus();
-        else {
-            const elementos = document.querySelectorAll('.tv-focusable'); 
-            if(elementos.length > 0) elementos[0].focus(); 
+        if (focusTarget) {
+            focusTarget.focus();
+            SpatialNavigation.focus(focusTarget); // Diz para a lib olhar para ele
         }
-    }, 100); 
-  };
+        else {
+            SpatialNavigation.focus('.tv-focusable'); // Foca no primeiro elemento clicável que achar
+        }
+    }, 200); // Aumentei o tempo para dar tempo do HTML do Player sumir
+  }, [itemSelecionado, progressos, sessaoUsuario.username]);
+
+  
+
   const formatarTempo = (segundos) => { if (!segundos) return ''; const m = Math.floor(segundos / 60); const s = Math.floor(segundos % 60); return `${m}m ${s}s`; };
   
   const decodeEPGText = (str) => {
