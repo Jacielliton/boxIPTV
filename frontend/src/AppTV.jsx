@@ -144,7 +144,8 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     if (itensDestaqueRaw[i + 1]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
     else if (itensDestaqueRaw[i]) paresDestaque.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
   }
-  const itensGrid = paresDestaque.length > 0 ? conteudoParaExibir.slice(6) : conteudoParaExibir;
+  // NOVO 4: Mantém todos os itens na grade, sem ocultar os 6 primeiros
+  const itensGrid = conteudoParaExibir;
 
   useEffect(() => {
     if (paresDestaque.length <= 1) return;
@@ -183,7 +184,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setItemSelecionado({ 
         id: filmeDetalhes.movie_data.stream_id, 
         nome: filmeDetalhes.info?.name, 
-        url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.${filmeDetalhes.movie_data.container_extension || 'mp4'}`, 
+        url: `${baseUrl}/movie/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${filmeDetalhes.movie_data.stream_id}.mp4`,
         startTime: inicio, 
         poster: filmeDetalhes.info?.movie_image 
     });
@@ -208,7 +209,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setItemSelecionado({ 
         id: ep.id, 
         nome: `${serieDetalhes?.info?.name} - S${temporadaSelecionada}E${ep.episode_num}`, 
-        url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.${ep.container_extension || 'mp4'}`, 
+        url: `${baseUrl}/series/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${ep.id}.mp4`, 
         startTime: inicio, 
         poster: ep.info?.movie_image || serieDetalhes?.info?.cover,
         proximoEpisodio: proximoEp // Guardamos o objeto do próximo episódio aqui
@@ -235,10 +236,20 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
     setItemSelecionado({ 
         id: canalDetalhes.info.stream_id, 
         nome: canalDetalhes.info.name, 
-        url: `${baseUrl}/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}`, 
+        url: `${baseUrl}/live/${playlistAtiva.iptv_username}/${playlistAtiva.iptv_password}/${canalDetalhes.info.stream_id}.m3u8`, 
         startTime: 0, 
         poster: canalDetalhes.info?.stream_icon 
     });
+  };
+
+  // NOVO 5: Função para focar no primeiro item carregado da nova página
+  const handleCarregarMais = () => {
+      const limiteAntigo = limite;
+      setLimite(limite + 50);
+      setTimeout(() => {
+          const novoPrimeiroItem = document.getElementById(`item-grid-${limiteAntigo}`);
+          if (novoPrimeiroItem) novoPrimeiroItem.focus();
+      }, 200);
   };
 
   // ==========================================
@@ -264,7 +275,15 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           e.preventDefault(); 
           if (estado.itemSelecionado) return;
           if (estado.modoBusca) { setModoBusca(false); return; }
-          if (estado.detalhesAbertos) { fecharDetalhes(); return; }
+          if (estado.detalhesAbertos) { 
+              fecharDetalhes(); 
+              // NOVO 3: Foca na primeira imagem listada na tela
+              setTimeout(() => {
+                  const firstItem = document.querySelector('.item-grid-tv.tv-focusable');
+                  if (firstItem) firstItem.focus();
+              }, 100);
+              return; 
+          }
         }
 
         const arrowKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
@@ -311,8 +330,28 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   
   const toggleMinhaLista = (item) => { if (!item) return; setMinhaLista(prev => { const idUnico = item.stream_id || item.series_id; const jaExiste = prev.find(i => (i.stream_id || i.series_id) === idUnico); const novaLista = jaExiste ? prev.filter(i => (i.stream_id || i.series_id) !== idUnico) : [{ ...item, tipo_salvo: tipoAtual }, ...prev]; localStorage.setItem(`boxiptv_lista_${sessaoUsuario.username}`, JSON.stringify(novaLista)); return novaLista; }); };
   
-  const handleClosePlayer = (tempoAtual, duracao) => { if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0; let novosProgressos = { ...progressos }; if (percentagemVista > 0.95) { delete novosProgressos[itemSelecionado.id]; } else { novosProgressos[itemSelecionado.id] = tempoAtual; } setProgressos(novosProgressos); localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos)); } setItemSelecionado(null); setTimeout(() => { const elementos = document.querySelectorAll('.tv-focusable'); if(elementos.length > 0) elementos[0].focus(); }, 100); };
-  
+  const handleClosePlayer = (tempoAtual, duracao) => { 
+    if (itemSelecionado && itemSelecionado.id && tempoAtual > 15) { 
+        const percentagemVista = duracao > 0 ? (tempoAtual / duracao) : 0; 
+        let novosProgressos = { ...progressos }; 
+        if (percentagemVista > 0.95) { delete novosProgressos[itemSelecionado.id]; } 
+        else { novosProgressos[itemSelecionado.id] = tempoAtual; } 
+        setProgressos(novosProgressos); 
+        localStorage.setItem(`boxiptv_progresso_${sessaoUsuario.username}`, JSON.stringify(novosProgressos)); 
+    } 
+    const idParaFocar = itemSelecionado?.id;
+    setItemSelecionado(null); 
+    
+    // NOVO 2: Tenta focar no botão do Player do conteúdo recém assistido
+    setTimeout(() => { 
+        const focusTarget = document.getElementById(`card-ep-${idParaFocar}`) || document.getElementById('btn-play-video') || document.getElementById('btn-play-canal');
+        if (focusTarget) focusTarget.focus();
+        else {
+            const elementos = document.querySelectorAll('.tv-focusable'); 
+            if(elementos.length > 0) elementos[0].focus(); 
+        }
+    }, 100); 
+  };
   const formatarTempo = (segundos) => { if (!segundos) return ''; const m = Math.floor(segundos / 60); const s = Math.floor(segundos % 60); return `${m}m ${s}s`; };
   
   const decodeEPGText = (str) => {
@@ -333,9 +372,46 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
           else e.currentTarget.click(); 
       } 
   };
+
+  // NOVO: Força o foco para o botão principal de Play assim que a tela de detalhes carregar
+  useEffect(() => {
+      if (filmeDetalhes || serieDetalhes || canalDetalhes) {
+          // Aumentado para 400ms. Algumas TV Boxes Android demoram um pouco mais para injetar o HTML
+          setTimeout(() => {
+              const btnContinuar = document.getElementById('btn-continuar-video');
+              const btnIniciar = document.getElementById('btn-play-video');
+              const btnPlayCanal = document.getElementById('btn-play-canal');
+              const primeiroEpisodio = document.querySelector('[id^="card-ep-"]');
+              
+              // Prioriza o botão de Continuar, depois Iniciar, depois Canal, depois Episódio
+              const targetFocus = btnContinuar || btnIniciar || btnPlayCanal || primeiroEpisodio;
+              if (targetFocus) targetFocus.focus();
+          }, 400); 
+      }
+  }, [filmeDetalhes, serieDetalhes, canalDetalhes, temporadaSelecionada]);
   
   const itemEstaNaLista = itemAtualDetalhes && minhaLista.some(i => (i.stream_id || i.series_id) === (itemAtualDetalhes.stream_id || itemAtualDetalhes.series_id));
+  
+  useEffect(() => {
+      if (filmeDetalhes || serieDetalhes || canalDetalhes) {
+          // Dá um pequeno tempo para o React terminar de desenhar o HTML na tela
+          setTimeout(() => {
+              const btnPlayVideo = document.getElementById('btn-play-video');
+              const btnPlayCanal = document.getElementById('btn-play-canal');
+              const primeiroEpisodio = document.querySelector('[id^="card-ep-"]');
+              
+              if (btnPlayVideo) {
+                  btnPlayVideo.focus();
+              } else if (btnPlayCanal) {
+                  btnPlayCanal.focus();
+              } else if (primeiroEpisodio) {
+                  primeiroEpisodio.focus();
+              }
+          }, 150);
+      }
+  }, [filmeDetalhes, serieDetalhes, canalDetalhes, temporadaSelecionada]);
 
+  
   if (mostrarAdmin) return <AdminPanel token={sessaoUsuario.token} onVoltar={() => setMostrarAdmin(false)} />;
 
   return (
@@ -481,11 +557,14 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                 <div style={{ display: 'flex', gap: '15px', flexWrap: 'wrap' }}>
                   {filmeDetalhes.movie_data && progressos[filmeDetalhes.movie_data.stream_id] > 15 ? (
                     <>
-                      <button tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(progressos[filmeDetalhes.movie_data.stream_id])} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 30px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Continuar ({formatarTempo(progressos[filmeDetalhes.movie_data.stream_id])})</button>
-                      <button tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(0)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 30px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><RefreshCw size={20} /> Reiniciar</button>
+                      {/* Corrigido: ID único para botão Continuar */}
+                      <button id="btn-continuar-video" tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(progressos[filmeDetalhes.movie_data.stream_id])} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 30px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Continuar ({formatarTempo(progressos[filmeDetalhes.movie_data.stream_id])})</button>
+                      
+                      {/* Corrigido: ID único para botão Reiniciar */}
+                      <button id="btn-reiniciar-video" tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(0)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 30px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#333', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><RefreshCw size={20} /> Reiniciar</button>
                     </>
                   ) : (
-                    <button tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(0)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 40px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Iniciar Filme</button>
+                    <button id="btn-play-video" tabIndex={0} className="tv-focusable" onClick={() => handlePlayFilme(0)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 40px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Iniciar Filme</button>
                   )}
                   <button tabIndex={0} className="tv-focusable" onClick={() => toggleMinhaLista(itemAtualDetalhes)} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '15px 20px', fontSize: '16px', fontWeight: 'bold', backgroundColor: itemEstaNaLista ? '#111' : '#333', color: itemEstaNaLista ? '#aaa' : 'white', border: `1px solid ${itemEstaNaLista ? '#333' : '#555'}`, borderRadius: '5px', cursor: 'pointer', transition: '0.2s' }}>{itemEstaNaLista ? <><Check size={20} /> Na Minha Lista</> : <><Bookmark size={20} /> Adicionar à Lista</>}</button>
                   <h1 style={{ marginTop: 0, marginBottom: '10px', fontSize: '32px' }}>{filmeDetalhes.info.name || 'Título Indisponível'}</h1>
@@ -524,8 +603,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                   return (
                     <div 
                       key={idx} 
-                      tabIndex={0} 
-                      className="tv-focusable" 
+                      id={`card-ep-${ep.id}`} tabIndex={0} className="tv-focusable" 
                       onClick={() => handlePlayEpisode(ep, tempoEp > 15 ? tempoEp : 0)} 
                       onKeyDown={(e) => {
                           // CORREÇÃO: Chamar a função diretamente preserva a permissão de Autoplay nativa do navegador
@@ -565,7 +643,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
             <div style={{ backgroundColor: '#222', padding: '30px', borderRadius: '8px', display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
               <div style={{ width: '250px', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                 <img src={canalDetalhes.info.stream_icon || CAPA_PADRAO} alt={canalDetalhes.info.name} onError={(e) => handleImageError(e, CAPA_PADRAO)} style={{ width: '100%', borderRadius: '8px', backgroundColor: '#000', padding: '20px', objectFit: 'contain' }} />
-                <button tabIndex={0} className="tv-focusable" onClick={handlePlayCanal} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '15px 20px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Assistir ao Vivo</button>
+                <button id="btn-play-canal" tabIndex={0} className="tv-focusable" onClick={handlePlayCanal} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '15px 20px', fontSize: '18px', fontWeight: 'bold', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer' }}><Play fill="currentColor" size={20} /> Assistir ao Vivo</button>
                 <button tabIndex={0} className="tv-focusable" onClick={() => toggleMinhaLista(itemAtualDetalhes)} style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '8px', padding: '12px 20px', fontSize: '14px', fontWeight: 'bold', backgroundColor: itemEstaNaLista ? '#111' : '#333', color: itemEstaNaLista ? '#aaa' : 'white', border: `1px solid ${itemEstaNaLista ? '#333' : '#555'}`, borderRadius: '5px', cursor: 'pointer', transition: '0.2s' }}>{itemEstaNaLista ? <><Check size={18} /> Na Minha Lista</> : <><Bookmark size={18} /> Favoritar Canal</>}</button>
               </div>
               <div style={{ flex: 1, minWidth: '250px' }}>
@@ -637,7 +715,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                           {par.map((item, subIdx) => (
                             <div 
                               key={subIdx}
-                              className={idx === indiceDestaque ? "tv-focusable banner-focusable" : ""} 
+                              className={idx === indiceDestaque ? "tv-focusable banner-focusable item-grid-tv" : "item-grid-tv"}
                               tabIndex={idx === indiceDestaque ? 0 : -1} 
                               onClick={() => handleItemClick(item)} 
                               onKeyDown={(e) => { if (idx === indiceDestaque) acionarComEnter(e, () => handleItemClick(item)) }}
@@ -686,8 +764,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
                             {itensGrid.map((item, index) => (
-                            <div key={index} tabIndex={0} className="tv-focusable" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} 
-                                style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
+                            <div key={index} id={`item-grid-${index}`} tabIndex={0} className="tv-focusable item-grid-tv" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
                                 
                                 {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
                                     <button
@@ -721,7 +798,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                         
                         {categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' && conteudoParaExibir.length < conteudo.length && (
                         <div style={{ textAlign: 'center', marginTop: '30px' }}>
-                            <button tabIndex={0} className="tv-focusable" onClick={() => setLimite(limite + 50)} style={{ padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px' }}>Carregar mais da categoria</button>
+                            <button tabIndex={0} className="tv-focusable" onClick={handleCarregarMais} style={{ padding: '12px 30px', fontSize: '16px', fontWeight: 'bold', cursor: 'pointer', backgroundColor: '#e50914', color: 'white', border: 'none', borderRadius: '5px' }}>Carregar mais da categoria</button>
                         </div>
                         )}
                     </>

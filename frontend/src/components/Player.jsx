@@ -19,6 +19,12 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
     const [showNextEp, setShowNextEp] = useState(false);
     let timeoutRef = useRef(null);
 
+    // NOVO 1: Impede que o timeout "esqueça" o estado atual do vídeo
+    const isPlayingRef = useRef(isPlaying);
+    useEffect(() => {
+        isPlayingRef.current = isPlaying;
+    }, [isPlaying]);
+
     if (!channel || !channel.url) return null;
 
     // A URL VEM PURA, SEM FORÇAR EXTENSÕES
@@ -69,9 +75,22 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         setShowControls(true);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
-            if (isPlaying) setShowControls(false);
+            // Lê direto do elemento HTML nativo do vídeo para não ter erro na TV Box
+            if (videoRef.current && !videoRef.current.paused) {
+                setShowControls(false);
+            }
         }, 4000); 
     };
+
+    useEffect(() => {
+        if (isPlaying) {
+            resetControlsTimeout();
+        } else {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current); // Garante a limpeza do timeout
+            setShowControls(true);
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isPlaying]);
 
     // Foca automaticamente no botão de próximo episódio quando ele aparecer
     useEffect(() => {
@@ -135,9 +154,17 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         return () => {
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
             document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+            // Removido o clearTimeout daqui!
         };
     }, [onClose]);
+
+    // Opcional: Adicione este useEffect separado caso queira garantir que o 
+    // timeout morra apenas quando o Player for fechado de vez.
+    useEffect(() => {
+        return () => {
+            if (timeoutRef.current) clearTimeout(timeoutRef.current);
+        };
+    }, []);
 
     useEffect(() => {
         setIsBuffering(true); 
@@ -194,9 +221,30 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
 
         if (isVod) {
             destroyPlayer();
-            videoRef.current.src = finalUrl;
-            videoRef.current.load(); // Força carregamento
-            tentarPlay();
+            
+            // Se for MKV e o navegador suportar extensões MSE (MpegTS)
+            if (isMkv && mpegts.getFeatureList().mseLivePlayback) {
+                try {
+                    playerRef.current = mpegts.createPlayer({ 
+                        type: 'mse', // MSE padrão tenta decodificar containers variados
+                        isLive: false, 
+                        url: finalUrl 
+                    });
+                    playerRef.current.attachMediaElement(videoRef.current);
+                    playerRef.current.load();
+                    tentarPlay();
+                } catch (err) {
+                    console.error("Falha ao tentar decodificar MKV via MSE:", err);
+                    // Em vez de forçar o erro no player nativo, avisamos o usuário que o formato é incompatível
+                    setIsBuffering(false);
+                    setErroPlayback(true);
+                }
+            } else {
+                // Comportamento normal para MP4 e AVI
+                videoRef.current.src = finalUrl;
+                videoRef.current.load(); 
+                tentarPlay();
+            }
             
         } else if (isHls) {
             destroyPlayer();
@@ -326,14 +374,15 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
     return (
         <div 
             ref={containerRef} 
-            onMouseMove={resetControlsTimeout}
+            // onMouseMove removido para evitar disparos fantasmas da TV Box
             onClick={resetControlsTimeout}
             tabIndex={0}
             className="tv-focusable" 
-            style={{ 
+            style={{
                 position: 'fixed', top: 0, left: 0, 
                 width: '100%', height: '100%', 
-                background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center' 
+                background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center',
+                cursor: showControls ? 'default' : 'none' /* NOVO 1: Oculta o mouse da TV Box */
             }}
         >
             <video 
@@ -346,7 +395,7 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                 onClick={togglePlay}
                 onDoubleClick={toggleTelaCheia} 
                 onWaiting={() => setIsBuffering(true)} 
-                onPlaying={() => { setIsBuffering(false); setErroPlayback(false); }} 
+                onPlaying={() => { setIsBuffering(false); setErroPlayback(false); setIsPlaying(true); }}
                 referrerPolicy="no-referrer" 
                 style={{ width: '100%', height: '100%', objectFit: 'contain', minWidth: '100vw', minHeight: '100vh' }} 
             />
@@ -402,9 +451,12 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
             )}
 
             <div style={{ 
-                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none',
+                position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+                // NOVO: Desativa completamente os ponteiros se os controles estiverem ocultos
+                pointerEvents: showControls ? 'auto' : 'none',
                 background: showControls ? 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.9) 100%)' : 'none',
-                opacity: showControls ? 1 : 0, transition: 'opacity 0.3s ease-in-out',
+                opacity: showControls ? 1 : 0, 
+                transition: 'opacity 0.3s ease-in-out',
                 display: 'flex', flexDirection: 'column', justifyContent: 'space-between', padding: '30px', zIndex: 6
             }}>
                 
