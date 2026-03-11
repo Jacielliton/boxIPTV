@@ -49,11 +49,30 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
   const estadoApp = useRef({ itemSelecionado: null, modoBusca: false, detalhesAbertos: false });
 
   // 3. TERCEIRO: Funções Blindadas (useCallbacks) que não dependem de nada
+  // 3. TERCEIRO: Funções Blindadas (useCallbacks) que não dependem de nada
   const fecharDetalhes = useCallback(() => {
+    // Pega o item que estava aberto na memória
+    const estado = estadoApp.current;
+    const itemSalvo = estado.itemAtualDetalhes;
+
     setSerieDetalhes(null);
     setFilmeDetalhes(null);
     setCanalDetalhes(null);
     setItemAtualDetalhes(null);
+
+    // Manda focar no item exato da lista, ou no primeiro se der erro
+    setTimeout(() => {
+        if (itemSalvo) {
+            const uniqueId = itemSalvo.stream_id || itemSalvo.series_id;
+            const element = document.querySelector(`[data-id="${uniqueId}"]`);
+            if (element) {
+                SpatialNavigation.focus(element);
+                return;
+            }
+        }
+        // Fallback: se não achar, foca no 1º item da grade
+        SpatialNavigation.focus('#item-grid-0');
+    }, 250);
   }, []);
 
   const getIptvUrl = useCallback((action, extraParams = '') => {
@@ -68,9 +87,10 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       estadoApp.current = {
           itemSelecionado,
           modoBusca,
-          detalhesAbertos: !!(filmeDetalhes || serieDetalhes || canalDetalhes)
+          detalhesAbertos: !!(filmeDetalhes || serieDetalhes || canalDetalhes),
+          itemAtualDetalhes // <-- LINHA ADICIONADA AQUI
       };
-  }, [itemSelecionado, modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes]);
+  }, [itemSelecionado, modoBusca, filmeDetalhes, serieDetalhes, canalDetalhes, itemAtualDetalhes]); // <-- ARRAY ATUALIZADA
 
   const ESCALA_TV = 0.75;
 
@@ -299,34 +319,32 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
             if (estado.detalhesAbertos) { fecharDetalhes(); return; }
         });
       };
-      
       setupListener();
 
       const handleKeyDown = (e) => {
         const estado = estadoApp.current;
-        
-        // Trata apenas as teclas de voltar
         if (e.key === 'Escape' || e.key === 'Backspace') {
           e.preventDefault(); 
           if (estado.itemSelecionado) return;
           if (estado.modoBusca) { setModoBusca(false); return; }
           if (estado.detalhesAbertos) { 
-              fecharDetalhes(); 
-              // Manda a biblioteca focar no item mais próximo na tela
-              setTimeout(() => SpatialNavigation.focus(), 100);
+              fecharDetalhes(); // A mágica do foco mora aqui dentro agora
               return; 
           }
         }
       };
       
       window.addEventListener('keydown', handleKeyDown); 
-      
       return () => {
         window.removeEventListener('keydown', handleKeyDown);
         if (backButtonListener) backButtonListener.remove(); 
       };
-      
   }, [fecharDetalhes]);
+
+  // NOVO: Faz o Radar de Navegação ler o mapa da tela sempre que o Banner ou a Lista mudarem
+  useEffect(() => {
+      SpatialNavigation.makeFocusable();
+  }, [indiceDestaque, conteudoParaExibir, serieDetalhes, filmeDetalhes, canalDetalhes, carregando]);
 
   const handleImageError = (e, fallback) => { if (e.target.src !== fallback) { e.target.onerror = null; e.target.src = fallback; } };
   
@@ -721,6 +739,8 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                           style={{
                             position: 'absolute', top: 0, left: 0, width: '100%', height: '100%',
                             opacity: idx === indiceDestaque ? 1 : 0, transition: 'opacity 1s ease-in-out',
+                            // MÁGICA AQUI: Tira da tela o que não é o destaque para não confundir o radar
+                            visibility: idx === indiceDestaque ? 'visible' : 'hidden', 
                             display: 'flex', gap: '20px', zIndex: idx === indiceDestaque ? 1 : 0,
                             pointerEvents: idx === indiceDestaque ? 'auto' : 'none'
                           }}
@@ -728,6 +748,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                           {par.map((item, subIdx) => (
                             <div 
                               key={subIdx}
+                              data-id={item?.stream_id || item?.series_id}
                               className={idx === indiceDestaque ? "tv-focusable banner-focusable item-grid-tv" : "item-grid-tv"}
                               tabIndex={idx === indiceDestaque ? 0 : -1} 
                               onClick={() => handleItemClick(item)} 
@@ -777,7 +798,7 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '20px' }}>
                             {itensGrid.map((item, index) => (
-                            <div key={index} id={`item-grid-${index}`} tabIndex={0} className="tv-focusable item-grid-tv" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
+                            <div key={index} id={`item-grid-${index}`} data-id={item?.stream_id || item?.series_id} tabIndex={0} className="tv-focusable item-grid-tv" onClick={() => handleItemClick(item)} onKeyDown={(e) => acionarComEnter(e, () => handleItemClick(item))} style={{ position: 'relative', background: '#222', borderRadius: '8px', cursor: 'pointer', overflow: 'hidden', border: '1px solid #333' }}>
                                 
                                 {(categoriaSelecionada === 'recentes' || categoriaSelecionada === 'minha-lista') && (
                                     <button

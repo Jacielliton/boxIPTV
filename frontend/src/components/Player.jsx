@@ -19,7 +19,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
     const [showNextEp, setShowNextEp] = useState(false);
     let timeoutRef = useRef(null);
 
-    // NOVO 1: Impede que o timeout "esqueça" o estado atual do vídeo
     const isPlayingRef = useRef(isPlaying);
     useEffect(() => {
         isPlayingRef.current = isPlaying;
@@ -27,7 +26,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
 
     if (!channel || !channel.url) return null;
 
-    // A URL VEM PURA, SEM FORÇAR EXTENSÕES
     let finalUrl = channel.url.trim();
 
     const isVod = finalUrl.toLowerCase().includes('.mp4') || finalUrl.toLowerCase().includes('.mkv') || finalUrl.toLowerCase().includes('.avi');
@@ -75,7 +73,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         setShowControls(true);
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         timeoutRef.current = setTimeout(() => {
-            // Lê direto do elemento HTML nativo do vídeo para não ter erro na TV Box
             if (videoRef.current && !videoRef.current.paused) {
                 setShowControls(false);
             }
@@ -86,13 +83,12 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         if (isPlaying) {
             resetControlsTimeout();
         } else {
-            if (timeoutRef.current) clearTimeout(timeoutRef.current); // Garante a limpeza do timeout
+            if (timeoutRef.current) clearTimeout(timeoutRef.current); 
             setShowControls(true);
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isPlaying]);
 
-    // Foca automaticamente no botão de próximo episódio quando ele aparecer
     useEffect(() => {
         if (showNextEp && btnNextRef.current) {
             btnNextRef.current.focus();
@@ -106,7 +102,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                 case 'enter': 
                 case ' ':
                 case 'k':
-                    // Não dar toggle play se o foco estiver no botão de próximo episódio
                     if (document.activeElement !== btnNextRef.current) {
                         e.preventDefault();
                         togglePlay();
@@ -117,14 +112,12 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                     toggleTelaCheia();
                     break;
                 case 'arrowright':
-                    // CORREÇÃO: Avança 15 segundos limitando ao final do vídeo
                     if (videoRef.current && isVod) {
                         videoRef.current.currentTime = Math.min(videoRef.current.currentTime + 15, videoRef.current.duration || 0);
                         setShowControls(true);
                     }
                     break;
                 case 'arrowleft':
-                    // CORREÇÃO: Retrocede 15 segundos limitando ao início (0) do vídeo
                     if (videoRef.current && isVod) {
                         videoRef.current.currentTime = Math.max(videoRef.current.currentTime - 15, 0);
                         setShowControls(true);
@@ -154,12 +147,9 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         return () => {
             document.removeEventListener('fullscreenchange', handleFullscreenChange);
             document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
-            // Removido o clearTimeout daqui!
         };
     }, [onClose]);
 
-    // Opcional: Adicione este useEffect separado caso queira garantir que o 
-    // timeout morra apenas quando o Player for fechado de vez.
     useEffect(() => {
         return () => {
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
@@ -222,11 +212,10 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         if (isVod) {
             destroyPlayer();
             
-            // Se for MKV e o navegador suportar extensões MSE (MpegTS)
             if (isMkv && mpegts.getFeatureList().mseLivePlayback) {
                 try {
                     playerRef.current = mpegts.createPlayer({ 
-                        type: 'mse', // MSE padrão tenta decodificar containers variados
+                        type: 'mse', 
                         isLive: false, 
                         url: finalUrl 
                     });
@@ -234,13 +223,11 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                     playerRef.current.load();
                     tentarPlay();
                 } catch (err) {
-                    console.error("Falha ao tentar decodificar MKV via MSE:", err);
-                    // Em vez de forçar o erro no player nativo, avisamos o usuário que o formato é incompatível
+                    console.error("Falha ao decodificar MKV via MSE:", err);
                     setIsBuffering(false);
                     setErroPlayback(true);
                 }
             } else {
-                // Comportamento normal para MP4 e AVI
                 videoRef.current.src = finalUrl;
                 videoRef.current.load(); 
                 tentarPlay();
@@ -324,7 +311,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         setProgresso(atual);
         setDuracao(total);
 
-        // Lógica de aparecer o botão faltando 20 segundos
         if (channel.proximoEpisodio && total > 0 && (total - atual) <= 20) {
             setShowNextEp(true);
         } else {
@@ -333,7 +319,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
     };
 
     const handleVideoEnded = () => {
-        // Avança automaticamente quando o vídeo chega ao fim
         if (channel.proximoEpisodio && onPlayNext) {
             onPlayNext();
         } else {
@@ -358,7 +343,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
         return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
     };
 
-    // Função interna para o onLoadedMetadata
     const handleLoadedMetadata = () => {
         if (startTime > 0 && videoRef.current) {
             videoRef.current.currentTime = startTime; 
@@ -374,7 +358,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
     return (
         <div 
             ref={containerRef} 
-            // onMouseMove removido para evitar disparos fantasmas da TV Box
             onClick={resetControlsTimeout}
             tabIndex={0}
             className="tv-focusable" 
@@ -382,7 +365,7 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                 position: 'fixed', top: 0, left: 0, 
                 width: '100%', height: '100%', 
                 background: '#000', zIndex: 9999, display: 'flex', justifyContent: 'center', alignItems: 'center',
-                cursor: showControls ? 'default' : 'none' /* NOVO 1: Oculta o mouse da TV Box */
+                cursor: showControls ? 'default' : 'none'
             }}
         >
             <video 
@@ -400,7 +383,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
                 style={{ width: '100%', height: '100%', objectFit: 'contain', minWidth: '100vw', minHeight: '100vh' }} 
             />
 
-            {/* BOTÃO DE PRÓXIMO EPISÓDIO */}
             {showNextEp && channel.proximoEpisodio && (
                 <div style={{ position: 'absolute', bottom: showControls ? '130px' : '40px', right: '40px', zIndex: 20, transition: 'bottom 0.3s ease-in-out' }}>
                     <button
@@ -452,7 +434,6 @@ export default function Player({ channel, onClose, startTime, poster, onPlayNext
 
             <div style={{ 
                 position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
-                // NOVO: Desativa completamente os ponteiros se os controles estiverem ocultos
                 pointerEvents: showControls ? 'auto' : 'none',
                 background: showControls ? 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, transparent 20%, transparent 80%, rgba(0,0,0,0.9) 100%)' : 'none',
                 opacity: showControls ? 1 : 0, 
