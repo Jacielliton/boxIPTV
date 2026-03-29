@@ -11,11 +11,16 @@ import uvicorn
 import os
 import json
 import shutil
+import random
+import string
 
 
 # Importações do seu banco de dados
 import models
 from database import engine, get_db
+
+# Dicionário em memória para guardar os códigos de pareamento do QR Code
+device_codes = {}
 
 # 1. INICIALIZAÇÃO E CONFIGURAÇÃO
 models.Base.metadata.create_all(bind=engine)
@@ -116,6 +121,43 @@ class UserLogin(BaseModel): username: str; password: str
 class PlaylistCreate(BaseModel): name: str; server_url: str; iptv_username: str; iptv_password: str
 class PremiumUpdate(BaseModel): dias_adicionais: int
 class StatusUpdate(BaseModel): status: str
+class DeviceLink(BaseModel): code: str; username: str; password: str
+
+# ==========================================
+# ROTAS DE PAREAMENTO (QR CODE)
+# ==========================================
+@app.get("/api/device/code", tags=["Device"])
+def generate_device_code():
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=6))
+    device_codes[code] = {"status": "pending", "credentials": None}
+    return {"code": code}
+
+@app.get("/api/device/poll/{code}", tags=["Device"])
+def poll_device_code(code: str):
+    if code not in device_codes:
+        raise HTTPException(status_code=404, detail="Código inválido ou expirado")
+    
+    if device_codes[code]["status"] == "linked":
+        creds = device_codes[code]["credentials"]
+        del device_codes[code] # Remove após consumir
+        return {"status": "linked", "username": creds["username"], "password": creds["password"]}
+    
+    return {"status": "pending"}
+
+@app.post("/api/device/link", tags=["Device"])
+def link_device(data: DeviceLink, db: Session = Depends(get_db)):
+    if data.code not in device_codes:
+        raise HTTPException(status_code=404, detail="Código inválido ou expirado")
+        
+    user = db.query(models.User).filter(models.User.username == data.username).first()
+    if not user or not verify_password(data.password, user.hashed_password):
+        raise HTTPException(status_code=401, detail="Credenciais incorretas")
+        
+    device_codes[data.code] = {
+        "status": "linked",
+        "credentials": {"username": data.username, "password": data.password}
+    }
+    return {"message": "Dispositivo vinculado com sucesso!"}
 
 # ==========================================
 # ROTAS DO SISTEMA (LOGIN / REGISTO / PLAYLISTS)

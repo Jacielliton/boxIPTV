@@ -9,14 +9,13 @@ const CAPA_PADRAO = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAA
 const EPISODIO_PADRAO = CAPA_PADRAO;
 
 export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, setPlaylistAtiva }) {
-  
-  // 1. PRIMEIRO: Todos os estados (useStates)
-  const [mostrarAdmin, setMostrarAdmin] = useState(false);
-  const [conteudo, setConteudo] = useState([]);
-  const [tipoAtual, setTipoAtual] = useState('filmes'); 
-  const [busca, setBusca] = useState('');
+  const [busca, setBusca] = useState(''); 
   
   const [modoBusca, setModoBusca] = useState(false);
+  const [mostrarAdmin, setMostrarAdmin] = useState(false);
+  const [conteudo, setConteudo] = useState([]);
+  const [todosConteudos, setTodosConteudos] = useState([]); 
+  const [tipoAtual, setTipoAtual] = useState('filmes');
   const inputBuscaRef = useRef(null);
 
   const [itemSelecionado, setItemSelecionado] = useState(null);
@@ -149,30 +148,48 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       }).catch(err => { setConteudo([]); setCarregando(false); });
   }, [categoriaSelecionada, tipoAtual, playlistAtiva, fecharDetalhes, getIptvUrl]); // <-- ADICIONADOS AQUI
 
+  // NOVO: Baixa todo o catálogo da área atual quando a busca é aberta
+  useEffect(() => {
+    if (modoBusca && todosConteudos.length === 0 && playlistAtiva) {
+      setCarregando(true);
+      const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
+      
+      fetch(getIptvUrl(actionStream))
+        .then(res => res.json())
+        .then(dCont => {
+          setTodosConteudos(Array.isArray(dCont) ? dCont : []);
+          setCarregando(false);
+        }).catch(() => setCarregando(false));
+    }
+  }, [modoBusca, tipoAtual, playlistAtiva, todosConteudos.length, getIptvUrl]);
+
   // Congela a filtragem da lista
   const conteudoParaExibir = useMemo(() => {
-    if (categoriaSelecionada === 'recentes') {
-      return historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
+    if (busca) {
+      // Busca global na área atual (Filmes, Séries ou TV)
+      return todosConteudos
+        .filter(item => item && item.name && item.name.toLowerCase().includes(busca.toLowerCase()))
+        .slice(0, limite);
+    } else if (categoriaSelecionada === 'recentes') {
+      return historico.filter(item => item && item.tipo_salvo === tipoAtual).slice(0, limite);
     } else if (categoriaSelecionada === 'minha-lista') {
-      return minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
+      return minhaLista.filter(item => item && item.tipo_salvo === tipoAtual).slice(0, limite);
     } else {
-      return conteudo.filter(item => !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()))).slice(0, limite);
+      return conteudo.slice(0, limite);
     }
-  }, [historico, minhaLista, conteudo, tipoAtual, busca, limite, categoriaSelecionada]);
-
-  // Congela o cálculo dos banners em destaque
-  const paresDestaque = useMemo(() => {
-    const itensDestaqueRaw = conteudoParaExibir.length > 0 && busca === '' && categoriaSelecionada !== 'recentes' && categoriaSelecionada !== 'minha-lista' ? conteudoParaExibir.slice(0, 6) : [];
-    const pares = [];
-    for (let i = 0; i < itensDestaqueRaw.length; i += 2) {
-      if (itensDestaqueRaw[i + 1]) pares.push([itensDestaqueRaw[i], itensDestaqueRaw[i + 1]]);
-      else if (itensDestaqueRaw[i]) pares.push([itensDestaqueRaw[i], itensDestaqueRaw[0]]);
-    }
-    return pares;
-  }, [conteudoParaExibir, busca, categoriaSelecionada]);
+  }, [historico, minhaLista, conteudo, todosConteudos, tipoAtual, busca, limite, categoriaSelecionada]);
 
   const itensGrid = conteudoParaExibir;
 
+  // NOVO: Calcula os itens de destaque (pegando os 6 primeiros e dividindo em pares)
+  const paresDestaque = useMemo(() => {
+    const itensDestaque = conteudoParaExibir.slice(0, 6);
+    const pares = [];
+    for (let i = 0; i < itensDestaque.length; i += 2) {
+      pares.push(itensDestaque.slice(i, i + 2));
+    }
+    return pares;
+  }, [conteudoParaExibir]);
 
   useEffect(() => {
     if (paresDestaque.length <= 1) return;
@@ -323,12 +340,19 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
 
       const handleKeyDown = (e) => {
         const estado = estadoApp.current;
+
+        // NOVO: Se o utilizador estiver focado no input de busca, 
+        // o Backspace deve APENAS apagar a letra e não fechar a tela!
+        if (e.key === 'Backspace' && e.target.tagName === 'INPUT') {
+            return; // Sai da função para que o Android apague a letra naturalmente
+        }
+
         if (e.key === 'Escape' || e.key === 'Backspace') {
           e.preventDefault(); 
           if (estado.itemSelecionado) return;
           if (estado.modoBusca) { setModoBusca(false); return; }
           if (estado.detalhesAbertos) { 
-              fecharDetalhes(); // A mágica do foco mora aqui dentro agora
+              fecharDetalhes(); 
               return; 
           }
         }
@@ -460,16 +484,16 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '15px 30px', backgroundColor: 'rgba(20, 20, 20, 0.95)', borderBottom: '1px solid #333', position: 'sticky', top: 0, zIndex: 100, width: '100%', boxSizing: 'border-box', marginBottom: '20px', borderRadius: '8px' }}>
         
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('filmes'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'filmes' ? '#e50914' : 'transparent', color: tipoAtual === 'filmes' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
+          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('filmes'); setTodosConteudos([]); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'filmes' ? '#e50914' : 'transparent', color: tipoAtual === 'filmes' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Film size={20} /> Filmes
           </button>
-          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('series'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'series' ? '#e50914' : 'transparent', color: tipoAtual === 'series' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
+          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('series'); setTodosConteudos([]); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'series' ? '#e50914' : 'transparent', color: tipoAtual === 'series' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Tv size={20} /> Séries
           </button>
-          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('ao-vivo'); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'ao-vivo' ? '#e50914' : 'transparent', color: tipoAtual === 'ao-vivo' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
+          <button tabIndex={0} className="tv-focusable" onClick={() => { setTipoAtual('ao-vivo'); setTodosConteudos([]); fecharDetalhes(); setLimite(50); setCategoriaSelecionada(''); setConteudo([]); }} style={{ padding: '10px 20px', borderRadius: '8px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '8px', border: 'none', transition: '0.2s', backgroundColor: tipoAtual === 'ao-vivo' ? '#e50914' : 'transparent', color: tipoAtual === 'ao-vivo' ? 'white' : '#aaa', fontWeight: 'bold', fontSize: '16px' }}>
             <Radio size={20} /> TV ao Vivo
           </button>
-        </div>        
+        </div>      
 
         <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>   
           <span style={{ color: '#aaa', fontSize: '14px', marginRight: '5px' }}>
@@ -501,11 +525,17 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
               <button 
                 tabIndex={0} 
                 className="tv-focusable" 
-                onClick={() => setModoBusca(true)}
-                // Adicionado: Muda a cor da borda ao focar com o controle, sem chamar o teclado
+                onClick={() => {
+                  // Limpa os detalhes silenciosamente SEM chamar o setTimeout que rouba o foco
+                  setSerieDetalhes(null);
+                  setFilmeDetalhes(null);
+                  setCanalDetalhes(null);
+                  setItemAtualDetalhes(null);
+                  
+                  setModoBusca(true);
+                }}
                 onFocus={(e) => e.target.style.borderColor = 'white'}
                 onBlur={(e) => e.target.style.borderColor = '#333'}
-                // Alterado: border de 1px para 2px (evita a tela "pular") e mantido o outline: 'none'
                 style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '2px solid #333', outline: 'none', fontSize: '14px', backgroundColor: '#333', color: busca ? 'white' : '#aaa', boxSizing: 'border-box', textAlign: 'left', cursor: 'pointer', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'border-color 0.2s' }}
               >
                 {busca ? busca : "Buscar na categoria..."}
@@ -515,23 +545,21 @@ export default function AppTV({ sessaoUsuario, playlistAtiva, efetuarLogout, set
                 ref={inputBuscaRef}
                 className="tv-focusable" 
                 type="text" 
-                placeholder="Digite e aperte OK..." 
+                placeholder="Buscar em todo o catálogo..." 
                 value={busca} 
                 onChange={(e) => { 
                   setBusca(e.target.value); 
                   setLimite(50); 
-                  fecharDetalhes(); 
+                  // Nenhuma função de fechar detalhes aqui. Digitação 100% livre!
                   window.scrollTo({ top: 0, behavior: 'smooth' }); 
                 }}
-                onBlur={() => setModoBusca(false)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === 'Escape') {
                     setModoBusca(false);
+                    setTimeout(() => SpatialNavigation.focus('.item-grid-tv'), 200);
                   }
                 }}
-                // Adicionado: Mantém o contorno branco quando clica e o teclado abre
                 onFocus={(e) => e.target.style.borderColor = 'white'}
-                // Mantido o outline: 'none'
                 style={{ width: '100%', padding: '10px 10px 10px 35px', borderRadius: '5px', border: '2px solid #e50914', outline: 'none', fontSize: '14px', backgroundColor: '#444', color: 'white', boxSizing: 'border-box', transition: 'border-color 0.2s' }} 
               />
             )}
