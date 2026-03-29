@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-PT">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/logo.png" />    
@@ -7,15 +7,113 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>BoxIPTV Pro</title>
     <style>
-    body {
-      background-color: #141414; /* Cor de fundo escura do seu app */
-      margin: 0;
-      padding: 0;
-    }
-  </style>
+      body {
+        background-color: #141414; /* Cor de fundo escura do seu app */
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+
+      /* Estilos protegidos apenas para a tela do QR Code */
+      #tv-link-container { 
+        display: none; justify-content: center; align-items: center; height: 100vh; color: white;
+      }
+      .tv-box { 
+        background-color: #222; padding: 30px; border-radius: 12px; width: 90%; max-width: 400px; text-align: center; box-shadow: 0 4px 15px rgba(0,0,0,0.5); 
+      }
+      .tv-box h2 { margin-top: 0; font-size: 26px; }
+      .tv-box input { 
+        width: 100%; padding: 14px; margin: 10px 0; border-radius: 8px; border: 1px solid #444; background: #333; color: white; box-sizing: border-box; font-size: 16px; outline: none; transition: 0.3s;
+      }
+      .tv-box input:focus { border-color: #e50914; }
+      .tv-box input[readonly] { background: #1a1a1a; color: #e50914; font-weight: bold; text-align: center; font-size: 20px; letter-spacing: 2px; }
+      .tv-box button { 
+        width: 100%; padding: 14px; background-color: #e50914; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 15px; transition: 0.3s;
+      }
+      .tv-box button:disabled { background-color: #e5091480; cursor: not-allowed; }
+      .message { margin-top: 20px; font-size: 15px; font-weight: bold; }
+    </style>
   </head>
   <body>
+    
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
+
+    <div id="tv-link-container">
+        <div class="tv-box">
+            <h2>BoxIPTV <span style="color: #e50914;">Pro</span></h2>
+            <p style="color: #aaa; font-size: 14px; margin-bottom: 25px;">Autorizar acesso na televisão</p>
+            
+            <input type="text" id="code" placeholder="Código exibido na TV" readonly>
+            <input type="text" id="username" placeholder="Nome de Utilizador">
+            <input type="password" id="password" placeholder="Palavra-passe">
+            
+            <button id="btn-submit" onclick="vincularTV()">Conectar TV</button>
+            <div id="mensagem" class="message"></div>
+        </div>
+    </div>
+
+    <script>
+        // Deteta se o utilizador está a aceder pela câmara (com ?code=) ou acessou o /login
+        const urlParams = new URLSearchParams(window.location.search);
+        const codigoUrl = urlParams.get('code');
+        const isLoginPage = window.location.pathname.includes('/login') || codigoUrl;
+
+        if (isLoginPage) {
+            // Esconde o aplicativo normal e mostra apenas o formulário da TV
+            document.getElementById('root').style.display = 'none';
+            document.getElementById('tv-link-container').style.display = 'flex';
+            
+            if (codigoUrl) {
+                document.getElementById('code').value = codigoUrl;
+            } else {
+                document.getElementById('code').removeAttribute('readonly');
+                document.getElementById('code').placeholder = "Digite o código de 6 dígitos da TV";
+            }
+        }
+
+        async function vincularTV() {
+            const code = document.getElementById('code').value.toUpperCase();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const mensagemDiv = document.getElementById('mensagem');
+            const btn = document.getElementById('btn-submit');
+
+            if (!code || !username || !password) {
+                mensagemDiv.style.color = '#ff4444';
+                mensagemDiv.innerText = 'Por favor, preencha todos os campos.';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'A conectar...';
+
+            try {
+                // Chamada à API da VPS para vincular o dispositivo
+                const response = await fetch('http://72.60.3.89:8006/api/device/link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code, username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    mensagemDiv.style.color = '#00C851';
+                    mensagemDiv.innerText = 'Sucesso! Pode olhar para a sua TV agora.';
+                } else {
+                    mensagemDiv.style.color = '#ff4444';
+                    mensagemDiv.innerText = data.detail || 'Erro ao vincular dispositivo.';
+                    btn.disabled = false;
+                    btn.innerText = 'Tentar Novamente';
+                }
+            } catch (error) {
+                mensagemDiv.style.color = '#ff4444';
+                mensagemDiv.innerText = 'Erro de comunicação com o servidor.';
+                btn.disabled = false;
+                btn.innerText = 'Tentar Novamente';
+            }
+        }
+    </script>
   </body>
 </html>

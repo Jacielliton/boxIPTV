@@ -9,6 +9,7 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
   const [tipoAtual, setTipoAtual] = useState('filmes');
   const [busca, setBusca] = useState('');
   const [conteudo, setConteudo] = useState([]);
+  const [todosConteudos, setTodosConteudos] = useState([]); // NOVO: Guarda o catálogo para busca global
   const [categorias, setCategorias] = useState([]);
   const [categoriaSelecionada, setCategoriaSelecionada] = useState('');
   const [carregando, setCarregando] = useState(false);
@@ -206,17 +207,35 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
   };
 
   // ==========================================
-  // FILTRAGEM INTELIGENTE
+  // EFEITO DE BUSCA GLOBAL (NOVO)
+  // ==========================================
+  useEffect(() => {
+    if (busca.length > 0 && todosConteudos.length === 0 && playlistAtiva) {
+      setCarregando(true);
+      const actionStream = tipoAtual === 'filmes' ? 'get_vod_streams' : (tipoAtual === 'series' ? 'get_series' : 'get_live_streams');
+      
+      fetch(getIptvUrl(actionStream))
+        .then(res => res.json())
+        .then(dCont => {
+          setTodosConteudos(Array.isArray(dCont) ? dCont : []);
+          setCarregando(false);
+        }).catch(() => setCarregando(false));
+    }
+  }, [busca, tipoAtual, playlistAtiva, todosConteudos.length]);
+
+  // ==========================================
+  // FILTRAGEM INTELIGENTE (ATUALIZADA)
   // ==========================================
   let conteudoFiltrado = [];
-  if (categoriaSelecionada === 'recentes') {
-    conteudoFiltrado = historico.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase())));
+  if (busca) {
+    // Se estiver pesquisando, filtra em TODO o catálogo baixado (Busca Global)
+    conteudoFiltrado = todosConteudos.filter(item => item && item.name && item.name.toLowerCase().includes(busca.toLowerCase()));
+  } else if (categoriaSelecionada === 'recentes') {
+    conteudoFiltrado = historico.filter(item => item && item.tipo_salvo === tipoAtual);
   } else if (categoriaSelecionada === 'minha-lista') {
-    conteudoFiltrado = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual && (!busca || item.name.toLowerCase().includes(busca.toLowerCase())));
+    conteudoFiltrado = minhaLista.filter(item => item && item.tipo_salvo === tipoAtual);
   } else {
-    conteudoFiltrado = conteudo.filter(item => {
-      return !busca || (item.name && item.name.toLowerCase().includes(busca.toLowerCase()));
-    });
+    conteudoFiltrado = conteudo;
   }
 
   // ==========================================
@@ -574,13 +593,13 @@ export default function AppMobile({ sessaoUsuario, playlistAtiva, efetuarLogout,
 
       {/* BOTTOM NAV BAR */}
       <div style={{ position: 'fixed', bottom: 0, left: 0, width: '100%', backgroundColor: 'rgba(20, 20, 20, 0.98)', backdropFilter: 'blur(15px)', display: 'flex', justifyContent: 'space-around', padding: '10px 0', borderTop: '1px solid #2a2a2a', zIndex: 100 }}>
-        <button onClick={() => { setTipoAtual('filmes'); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'filmes' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
+        <button onClick={() => { setTipoAtual('filmes'); setTodosConteudos([]); setBusca(''); setLimite(50); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'filmes' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
           <Film size={22} color={tipoAtual === 'filmes' ? '#e50914' : 'currentColor'} /> <span style={{ fontSize: '11px', fontWeight: tipoAtual === 'filmes' ? 'bold' : 'normal' }}>Filmes</span>
         </button>
-        <button onClick={() => { setTipoAtual('series'); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'series' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
+        <button onClick={() => { setTipoAtual('series'); setTodosConteudos([]); setBusca(''); setLimite(50); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'series' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
           <Tv size={22} color={tipoAtual === 'series' ? '#e50914' : 'currentColor'} /> <span style={{ fontSize: '11px', fontWeight: tipoAtual === 'series' ? 'bold' : 'normal' }}>Séries</span>
         </button>
-        <button onClick={() => { setTipoAtual('ao-vivo'); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'ao-vivo' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
+        <button onClick={() => { setTipoAtual('ao-vivo'); setTodosConteudos([]); setBusca(''); setLimite(50); window.scrollTo(0, 0); }} style={{ background: 'none', border: 'none', color: tipoAtual === 'ao-vivo' ? '#fff' : '#666', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', flex: 1 }}>
           <Radio size={22} color={tipoAtual === 'ao-vivo' ? '#e50914' : 'currentColor'} /> <span style={{ fontSize: '11px', fontWeight: tipoAtual === 'ao-vivo' ? 'bold' : 'normal' }}>TV</span>
         </button>
       </div>
