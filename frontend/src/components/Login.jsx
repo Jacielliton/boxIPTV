@@ -118,14 +118,14 @@ export default function Login({ onLogin }) {
           <div style={{ textAlign: 'center', marginBottom: '30px' }}>
             <h3 style={{ margin: '0 0 15px 0' }}>Login por Dispositivo</h3>
             <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '20px' }}>
-              Acesse <strong>http://tecnopriv.top/login</strong> no seu celular e digite o código abaixo:
+              Acesse <strong>http://iptv.tecnopriv.top/login</strong> no seu celular e digite o código abaixo:
             </p>
             <div style={{ fontSize: '36px', fontWeight: 'bold', letterSpacing: '8px', color: '#e50914', marginBottom: '20px' }}>
               {qrCode || '...'}
             </div>
             {qrCode && (
               <img 
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://tecnopriv.top/login?code=${qrCode}&bgcolor=141414&color=ffffff`} 
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://iptv.tecnopriv.top/login?code=${qrCode}&bgcolor=141414&color=ffffff`} 
                 alt="QR Code" 
                 style={{ border: '5px solid white', borderRadius: '10px' }} 
               />
