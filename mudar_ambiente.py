@@ -9,7 +9,7 @@ AMBIENTES = {
     "2": {"nome": "APP Android / Domínio (HTTPS Seguro)", "url": "https://iptv.tecnopriv.top"},
     "3": {"nome": "VPS (IP Direto)", "url": "http://72.60.3.89:8006"},
     "4": {"nome": "Produção Web Nginx (Caminho Relativo)", "url": ""},
-    "5": {"nome": "Railway (Produção Backend)", "url": "boxiptv-production.up.railway.app"} 
+    "5": {"nome": "Railway (Produção Backend)", "url": "https://boxiptv-production.up.railway.app"} 
 }
 
 def limpar_tela():
@@ -18,12 +18,14 @@ def limpar_tela():
 def trocar_urls(nova_url, nome_ambiente):
     arquivos_alterados = 0
     print(f"\nProcurando ficheiros em: {PASTA_SRC}")
-    
-    # REGEX INTELIGENTE: Padrão 1: Apanha fetch('http://IP/api/...') ou fetch('/api/...')
-    padrao_api = re.compile(r"(['`])(?:https?://[^/'`]+)?(/api/)")
-    
-    # REGEX INTELIGENTE: Padrão 2: Apanha fetch(`http://IP${endpoint}...`) usado no Login.jsx
-    padrao_endpoint = re.compile(r"([`])(?:https?://[^/'`]+)?(\$\{endpoint\})")
+
+    urls_antigas = [
+        "http://localhost:8006",
+        "https://iptv.tecnopriv.top",
+        "http://72.60.3.89:8006",
+        "https://boxiptv-production.up.railway.app",
+        "boxiptv-production.up.railway.app"
+    ]
 
     for root, dirs, files in os.walk(PASTA_SRC):
         for file in files:
@@ -32,10 +34,13 @@ def trocar_urls(nova_url, nome_ambiente):
                 with open(filepath, 'r', encoding='utf-8') as f:
                     conteudo = f.read()
                 
-                # 1. Substitui as URLs que terminam com /api/
-                novo_conteudo = padrao_api.sub(rf"\g<1>{nova_url}\g<2>", conteudo)
-                # 2. Substitui as URLs que terminam com a variável ${endpoint}
-                novo_conteudo = padrao_endpoint.sub(rf"\g<1>{nova_url}\g<2>", novo_conteudo)
+                novo_conteudo = conteudo
+                for url_antiga in urls_antigas:
+                    if nova_url != "":
+                        novo_conteudo = novo_conteudo.replace(url_antiga, nova_url)
+                    else:
+                        # Se for a opção 4 (caminho relativo vazio), removemos apenas as URLs antigas base
+                        novo_conteudo = novo_conteudo.replace(url_antiga + "/api", "/api")
                 
                 if novo_conteudo != conteudo:
                     with open(filepath, 'w', encoding='utf-8') as f:

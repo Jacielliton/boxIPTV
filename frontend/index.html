@@ -90,7 +90,7 @@
 
             try {
                 // Chamada à API da VPS para vincular o dispositivo
-                const response = await fetch('http://72.60.3.89:8006/api/device/link', {
+                const response = await fetch('https://boxiptv-production.up.railway.app/api/device/link', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code, username, password })

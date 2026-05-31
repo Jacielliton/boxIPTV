@@ -18,12 +18,12 @@ export default function Login({ onLogin }) {
   useEffect(() => {
     let intervalo;
     if (modoLogin === 'qrcode') {
-      fetch('boxiptv-production.up.railway.app/api/device/code')
+      fetch('https://https://boxiptv-production.up.railway.app/api/device/code')
         .then(res => res.json())
         .then(data => {
           setQrCode(data.code);
           intervalo = setInterval(() => {
-            fetch(`boxiptv-production.up.railway.app/api/device/poll/${data.code}`)
+            fetch(`https://https://boxiptv-production.up.railway.app/api/device/poll/${data.code}`)
               .then(res => res.json())
               .then(pollData => {
                 if (pollData.status === 'linked') {
@@ -42,7 +42,7 @@ export default function Login({ onLogin }) {
   const efetuarLoginQr = async (user, pass) => {
     setCarregando(true);
     try {
-      const response = await fetch('boxiptv-production.up.railway.app/api/login', {
+      const response = await fetch('https://https://boxiptv-production.up.railway.app/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: user, password: pass })
@@ -69,7 +69,7 @@ export default function Login({ onLogin }) {
     setCarregando(true);
 
     try {
-      const url = modoLogin === 'login' ? 'boxiptv-production.up.railway.app/api/login' : 'boxiptv-production.up.railway.app/api/register';
+      const url = modoLogin === 'login' ? 'https://https://boxiptv-production.up.railway.app/api/login' : 'https://https://boxiptv-production.up.railway.app/api/register';
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -206,7 +206,7 @@ export default function Login({ onLogin }) {
         </>
         )}
 
-        {/* BOTÕES DE NAVEGAÇÃO ENTRE ABAS */}
+        {/* BOTÕES DE NAVEGAÇÃO ENTRE ABASs */}
         <div style={{ textAlign: 'center', marginTop: '25px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
           
           {modoLogin !== 'qrcode' && (
