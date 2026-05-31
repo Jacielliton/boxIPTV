@@ -8,7 +8,8 @@ AMBIENTES = {
     "1": {"nome": "Localhost (Desenvolvimento local)", "url": "http://localhost:8006"},
     "2": {"nome": "APP Android / Domínio (HTTPS Seguro)", "url": "https://iptv.tecnopriv.top"},
     "3": {"nome": "VPS (IP Direto)", "url": "http://72.60.3.89:8006"},
-    "4": {"nome": "Produção Web Nginx (Caminho Relativo)", "url": ""} # <-- A MÁGICA AQUI
+    "4": {"nome": "Produção Web Nginx (Caminho Relativo)", "url": ""},
+    "5": {"nome": "Railway (Produção Backend)", "url": "URL_DO_SEU_BACKEND_RAILWAY_AQUI"} 
 }
 
 def limpar_tela():

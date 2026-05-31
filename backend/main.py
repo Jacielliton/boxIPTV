@@ -27,27 +27,22 @@ models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="BoxIPTV Pro - Backend Core")
 
-# Cria a pasta 'uploads' se não existir
-UPLOAD_DIR = "uploads"
+# Configuração de diretório para persistência no Railway
+BASE_DIR = "/data" if os.getenv("RAILWAY_ENVIRONMENT") else "."
+
+# Cria a pasta 'uploads' se não existir dentro do diretório persistente
+UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Diz ao FastAPI para servir os arquivos desta pasta publicamente
 app.mount("/download", StaticFiles(directory=UPLOAD_DIR), name="download")
 
 # Arquivo JSON que vai guardar a versão atual dinamicamente
-VERSION_FILE = "versao_apk.json"
+VERSION_FILE = os.path.join(BASE_DIR, "versao_apk.json")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3006",      
-        "http://iptv.tecnopriv.top",  
-        "https://iptv.tecnopriv.top", 
-        "capacitor://localhost",      
-        "http://localhost",
-        "https://localhost",           
-        "ionic://localhost"
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -323,4 +318,6 @@ def checar_versao():
     }
     
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8006, reload=True)
+    # O Railway injeta a porta automaticamente através da variável de ambiente PORT
+    port = int(os.environ.get("PORT", 8006))
+    uvicorn.run("main:app", host="0.0.0.0", port=port)

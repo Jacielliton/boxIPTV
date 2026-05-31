@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tutorial: BoxIPTV Pro - Do Localhost à Produção</title>
+    <style>
+        :root {
+            --bg-color: #141414;
+            --card-bg: #222222;
+            --primary: #e50914;
+            --text-main: #ffffff;
+            --text-muted: #aaaaaa;
+            --terminal-bg: #0d0d0d;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 40px auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        header h1 span {
+            color: var(--primary);
+        }
+
+        header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+        }
+
+        .step-card {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            border-top: 4px solid var(--primary);
+        }
+
+        .step-card h2 {
+            margin-top: 0;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .step-card h2 .step-number {
+            background-color: var(--primary);
+            color: white;
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.2rem;
+        }
+
+        .terminal {
+            background-color: var(--terminal-bg);
+            border-radius: 8px;
+            padding: 15px;
+            font-family: 'Courier New', Courier, monospace;
+            overflow-x: auto;
+            border: 1px solid #333;
+            margin: 15px 0;
+        }
+
+        .terminal code {
+            color: #00ff00;
+            font-size: 0.95rem;
+        }
+
+        .terminal .comment {
+            color: #888;
+        }
+
+        .highlight {
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .note {
+            background-color: rgba(229, 9, 20, 0.1);
+            border-left: 4px solid var(--primary);
+            padding: 15px;
+            border-radius: 0 8px 8px 0;
+            margin: 20px 0;
+            font-size: 0.95rem;
+        }
+        
+        ol li {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header>
+            <h1>BoxIPTV <span>Pro</span></h1>
+            <p>Guia Definitivo: Desenvolvimento, Deploy na VPS e Geração de APK</p>
+        </header>
+
+        <section class="step-card">
+            <h2><span class="step-number">1</span> Rodar o Projeto em Localhost</h2>
+            <p>Para testar novas funcionalidades no seu computador antes de enviar para o servidor, precisa de iniciar o Backend (API) e o Frontend (React).</p>
+            
+            <h3>Passo A: Iniciar o Backend (FastAPI)</h3>
+            <div class="terminal">
+<pre><code><span class="comment"># 1. Navegue até à pasta do backend</span>
+cd backend
+
+<span class="comment"># 2. Ative o ambiente virtual Python</span>
+venv\Scripts\activate
+
+<span class="comment"># 3. Inicie o servidor</span>
+python main.py</code></pre>
+            </div>
+            <p>O backend ficará a rodar em <strong>http://localhost:8006</strong>.</p>
+
+            <h3>Passo B: Iniciar o Frontend (Vite/React)</h3>
+            <p>No seu projeto, utiliza o script de gestão de ambientes para direcionar a API.</p>
+            <div class="terminal">
+<pre><code><span class="comment"># 1. Abra um novo terminal e vá para a raiz do projeto</span>
+<span class="comment"># 2. Rode o script de mudança de ambiente</span>
+python mudar_ambiente.py
+
+<span class="comment"># 3. Escolha a Opção 1 (Localhost)</span>
+<span class="comment"># 4. Entre na pasta do frontend e inicie</span>
+cd frontend
+npm run dev</code></pre>
+            </div>
+            <p>O frontend ficará disponível em <strong>http://localhost:3006</strong>.</p>
+        </section>
+
+        <section class="step-card">
+            <h2><span class="step-number">2</span> Deploy Automático na VPS</h2>
+            <p>Sempre que as atualizações estiverem perfeitas, é hora de enviar para a nuvem.</p>
+
+            <h3>Passo A: Enviar para o GitHub</h3>
+            <div class="terminal">
+<pre><code><span class="comment"># Na sua máquina local, rode:</span>
+git add .
+git commit -m "Nova atualização incrível"
+git push origin main</code></pre>
+            </div>
+
+            <h3>Passo B: Atualizar o Servidor</h3>
+            <p>Graças ao seu script <code>deploy.sh</code>, o processo na VPS é extremamente simples.</p>
+            <div class="terminal">
+<pre><code><span class="comment"># 1. Aceda ao seu servidor via SSH e vá para a pasta do projeto</span>
+cd /var/www/boxIPTV
+
+<span class="comment"># 2. Puxe o código mais recente do GitHub</span>
+git pull
+
+<span class="comment"># 3. Execute o script de Deploy</span>
+chmod +x deploy.sh ➔ ./deploy.sh</code></pre>
+            </div>
+            <div class="note">
+                <strong>Nota:</strong> O script encarrega-se de compilar o Vite, gerar a pasta <code>dist</code> e reiniciar o Nginx e o FastAPI automaticamente. O seu site web estará imediatamente atualizado.
+            </div>
+        </section>
+
+        <section class="step-card">
+            <h2><span class="step-number">3</span> Gerar o Ficheiro APK (Android)</h2>
+            <p>Para construir a aplicação que será instalada nos telemóveis e TV Boxes, o código React precisa de ser empacotado pelo Capacitor e compilado no Android Studio.</p>
+
+            <ol>
+                <li><strong>Mudar o Ambiente:</strong> O APK não pode apontar para o localhost.
+                    <div class="terminal">
+<pre><code>python mudar_ambiente.py
+<span class="comment"># Escolha a Opção 2 (APP Android / Domínio)</span></code></pre>
+                    </div>
+                </li>
+                
+                <li><strong>Compilar o Frontend para Produção:</strong>
+                    <div class="terminal">
+<pre><code>cd frontend
+npm run build</code></pre>
+                    </div>
+                </li>
+
+                <li><strong>Sincronizar com o Capacitor:</strong> Isto copia os ficheiros HTML/JS gerados para dentro da pasta nativa do Android.
+                    <div class="terminal">
+<pre><code>npx cap sync android</code></pre>
+                    </div>
+                </li>
+
+                <li><strong>Abrir no Android Studio e Gerar:</strong>
+                    <div class="terminal">
+<pre><code>npx cap open android</code></pre>
+                    </div>
+                    <p>No Android Studio, aguarde o carregamento completo (índice e Gradle). Depois, no menu superior, clique em:<br>
+                    <span class="highlight">2x Shift ➔ Digite Clean e limpe ➔ Digite APKs e gere o APK</span></p>
+                </li>
+            </ol>
+            
+            <div class="note">
+                <strong>Sucesso!</strong> Quando a compilação terminar, clique em <strong>"locate"</strong> na notificação do canto inferior direito. O ficheiro <code>app-debug.apk</code> estará pronto para ser instalado.
+            </div>
+        </section>
+
+    </div>
+</body>
+</html>

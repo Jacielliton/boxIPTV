@@ -1,7 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base
+import os
 
-SQLALCHEMY_DATABASE_URL = "sqlite:///./boxiptv.db"
+# Se estiver no Railway, usa o Volume persistente em /data. Caso contrário, usa a raiz local.
+DB_PATH = "/data/boxiptv.db" if os.getenv("RAILWAY_ENVIRONMENT") else "./boxiptv.db"
+SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL, connect_args={"check_same_thread": False}
