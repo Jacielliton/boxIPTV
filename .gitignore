@@ -15,7 +15,7 @@ env.bak/
 venv.bak/
 
 # Banco de dados local (NUNCA commitar isso!)
-*.db
+#*.db
 *.sqlite3
 backend/boxiptv.db
 

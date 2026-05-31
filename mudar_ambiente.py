@@ -9,7 +9,7 @@ AMBIENTES = {
     "2": {"nome": "APP Android / Domínio (HTTPS Seguro)", "url": "https://iptv.tecnopriv.top"},
     "3": {"nome": "VPS (IP Direto)", "url": "http://72.60.3.89:8006"},
     "4": {"nome": "Produção Web Nginx (Caminho Relativo)", "url": ""},
-    "5": {"nome": "Railway (Produção Backend)", "url": "URL_DO_SEU_BACKEND_RAILWAY_AQUI"} 
+    "5": {"nome": "Railway (Produção Backend)", "url": "boxiptv-production.up.railway.app"} 
 }
 
 def limpar_tela():
